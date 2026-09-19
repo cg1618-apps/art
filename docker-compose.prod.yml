@@ -15,13 +15,6 @@ services:
       - .env
     environment:
       PORT: 8003
-      # REHEARSAL ONLY, removed in the follow-up change. Makes /health answer
-      # 503 in production and nowhere else, so this deploy reaches exit 2 and
-      # bin/rollback runs for real against the revision this release adds.
-      # Set here rather than in the code so the suite stays honest: an
-      # unconditional 503 would fail the healthy-path test and make the three
-      # 503 tests pass without their fixtures being consulted at all.
-      REHEARSE_UNHEALTHY: "1"
     networks:
       cg1618:
         # The generated ingress routes art.cg1618.com to

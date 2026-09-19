@@ -121,3 +121,55 @@ platform-wide convention, shared with `food` and `travel`.
 Anything that analyses the images themselves. Time-tracking reports beyond
 what a list of records shows. Anything multi-user beyond the eventual
 read-only share of a finished piece.
+
+## The rollback was rehearsed, and it worked
+
+`downgrade` had never run end to end on any app in this platform. The refusal
+path was tested against a scratch chain that never reverses anything; the
+reversal itself had never executed. That made it the largest untested piece of
+the system, and the one that runs unattended on the box a minute after a
+failed deploy.
+
+So a release was built to fail on purpose: a revision creating a table, and a
+`/health` that answers 503 behind an environment variable set only in the
+production compose. It was deployed to art, whose database is empty and which
+nothing depends on.
+
+Every step ran, in order and without help:
+
+```
+schema was at 0001_baseline
+==> Tagging the outgoing image as art-app:previous
+==> Waiting for health
+art not healthy after 180s          -> exit 2
+==> Deploy failed. Rolling back art toward c011f4e
+==> This deploy added migrations:
+==> Downgrading to 0001_baseline
+==> Restoring the previous image
+==> Re-checking health
+healthy
+```
+
+The box was checked afterwards against the state recorded before: revision
+back at `0001_baseline`, the table dropped, the checkout returned to the
+pre-deploy revision, the container healthy on the previous image.
+
+Three things worth keeping from it:
+
+- **`exit 2` reaches the rollback, and `exit 1` must not.** The distinction is
+  the pipeline's most expensive mistake and it is now observed rather than
+  argued.
+- **A rollback leaves the checkout detached** at the revision the dump belongs
+  to. `bin/deploy` returns it to `main` on the next run, which is why that
+  recovery exists: without it one rollback disables automatic deploys
+  silently.
+- **The image tag is load-bearing.** `art-app:previous` did not exist before
+  this deploy — art had only ever had one — and the deploy created it by
+  tagging the outgoing image. Had that step not run, the rollback would have
+  frozen rather than swapped.
+
+What this did **not** test is the refusal: a revision marked
+`irreversible = True` must never be reversed, so it cannot be rehearsed by
+reversing one. That stays covered by the hook's own tests. Nor did it test the
+data restore, which is deliberately manual - `bin/rollback` reverses the
+schema and says, in capitals, that the data was not restored.

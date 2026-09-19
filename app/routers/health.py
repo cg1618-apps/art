@@ -21,7 +21,6 @@ the database. Two authoritative answers that can disagree mid-deploy is worse
 than one.
 """
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -76,22 +75,6 @@ def expected_revision() -> str | None:
 
 @router.get("")
 def health(response: Response, db: Session = Depends(get_db)):
-    # REHEARSAL ONLY, removed in the follow-up change. Forces the deploy to
-    # exit 2 - "it ran and is unhealthy" - so bin/rollback actually runs and
-    # reverses the revision this release adds. downgrade had never run end to
-    # end on any app here; only the refusal path was tested, against a scratch
-    # chain that never reversed anything.
-    #
-    # Behind an environment variable set only in docker-compose.prod.yml, not
-    # hardcoded. An unconditional 503 fails the suite's one healthy-path test,
-    # which would block the release - and it makes the three 503 tests pass
-    # VACUOUSLY, asserting a status this line returns before their fixtures
-    # are consulted at all. A gate that stops computing is the failure mode
-    # this repository's testing notes are about.
-    if os.getenv("REHEARSE_UNHEALTHY") == "1":
-        response.status_code = 503
-        return {"status": "rehearsal"}
-
     try:
         actual = read_alembic_revision(db)
         expected = expected_revision()
