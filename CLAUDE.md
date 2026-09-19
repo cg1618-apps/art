@@ -27,9 +27,13 @@ media tracker's by default.
 
 ## Status
 
-**Nothing is built.** There is no stack, no schema, no application code. The
-next step is design, not implementation — brainstorm into
-`docs/superpowers/specs/`, and only then plan.
+**The skeleton is built; no feature is.** FastAPI serves `/health` and the
+built SPA, Alembic's chain holds one empty baseline revision, and the deploy
+pipeline's hook, the production compose file and both workflows are in place.
+There is no schema and no module from the table in `docs/notes/decisions.md`.
+
+Each module gets its own design pass immediately before it is built —
+brainstorm into `docs/superpowers/specs/`, then plan, then implement.
 
 ## The contract this app owes the platform
 
@@ -57,9 +61,9 @@ The cost is known and accepted: a build step, a second port in development, and
 a `frontend_dist/` that goes stale if you forget to rebuild. The media
 tracker's `CLAUDE.md` documents each of those.
 
-Migrations: Alembic, which means this app ships `deploy/migrations` with
-`current`, `added` and `downgrade` once it has a schema — the hook the
-platform's rollback calls. See the platform's Step 4 plan.
+Migrations: Alembic. This app ships `deploy/migrations` with `current`,
+`added` and `downgrade` — the hook the platform's rollback calls. See
+"Migrations" below.
 
 ## Who can see it
 
@@ -94,12 +98,54 @@ codebase. The visibility checks have to work *before* that lands, and be tested
 for refusal with fixtures that make refusal possible — a check over an empty set
 passes without ever firing.
 
+## Ports
+
+Both come from `apps.yml`, and both are box-wide: all four apps may run on one
+laptop at once, so neither may be changed to dodge a collision.
+
+- **8003** — uvicorn. The registry port, the `PORT` the production container is
+  given, and the port the `art-app` network alias is routed to.
+- **5176** — the Vite dev server, `5173 + (8003 - 8000)`, with `strictPort` so
+  a taken port aborts rather than silently moving.
+
+Vite proxies **both** `/api` and `/health` to 8003. This app's health path is
+`/health`, not `/api/health` — `apps.yml` declares it and the deploy pipeline
+waits on it — so `app/main.py`'s SPA catch-all refuses anything under `health/`
+as well as under `api/`. Without that a mistyped probe is answered by the
+bundle with a 200, and a health check that cannot fail is worse than none.
+
 ## Commands
 
 ```bash
-venv/Scripts/python.exe -m pytest -q      # tests
-venv/Scripts/ruff.exe check .             # lint
+.\dev.ps1                                  # postgres + uvicorn + vite
+venv/Scripts/python.exe -m pytest -q       # tests
+venv/Scripts/ruff.exe check .              # lint
+venv/Scripts/python.exe -m alembic upgrade head
+cd frontend && npm run build               # writes frontend_dist/ for uvicorn
+cd frontend && npm run lint                # oxlint
 ```
 
-That is all there is until a stack is chosen. Add commands here as they become
-real, not before.
+**After any frontend change run `npm run build`**: uvicorn on 8003 serves the
+prebuilt bundle in `frontend_dist/`, which the Vite dev server on 5176 does not
+use. A change that appears on one port only is a stale build.
+
+`frontend_dist/` is gitignored and rebuilt per machine, as are `venv/` and
+`node_modules/`.
+
+## Migrations
+
+Alembic, single head. The chain starts at `0001_baseline`, which is
+deliberately empty: it exists so `tests/test_migrations_build_the_schema.py`
+can prove from the first commit that the chain builds against a scratch
+database from zero, rather than from whenever someone remembers to add it.
+
+```bash
+venv/Scripts/python.exe -m alembic heads     # more than one line = broken
+venv/Scripts/python.exe -m alembic revision --autogenerate -m "describe change"
+```
+
+`deploy/migrations` is the hook the platform's rollback calls — `current`,
+`added`, `downgrade`. It **must** be mode `100755` in the commit; verify with
+`git ls-tree HEAD -- deploy/migrations`, never `git ls-files`, which reads the
+index and has given false passes. Fix a wrong mode with
+`git update-index --chmod=+x deploy/migrations`.
