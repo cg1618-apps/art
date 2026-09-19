@@ -26,6 +26,24 @@ as they bind this app:
 - **Cloudflare Access over the whole hostname, and no auth code in the app.**
   One user, no accounts. Rejected: an app-level password, for the same reasons
   as `travel`.
+- **The skeleton is travel's, copied and renamed.** `travel` is the smallest
+  app on the box and was already through a first deploy, so its shape — the
+  `create_app(dist)` factory, the revision-comparing health probe, the
+  `deploy/migrations` hook, the production compose file and the two workflows —
+  is the one with the production failures already taken out of it. Rejected:
+  starting from the media tracker, which carries four months of features this
+  app has no use for, and starting from nothing.
+- **The health path is `/health`, not `/api/health`.** `apps.yml` declares it,
+  and the deploy pipeline reads the path it waits on from there, so the
+  registry is the authority and the app follows it. The cost is that the SPA
+  catch-all has to refuse `health/...` as well as `api/...`: a health path
+  outside `/api` is otherwise answered by the bundle with a 200, and a probe
+  that cannot fail is worse than no probe. The Vite dev proxy forwards both
+  prefixes for the same reason.
+- **Ports 8003 and 5176**, from `apps.yml` and from the box-wide rule
+  `Vite = 5173 + (port - 8000)`. All four apps may run on one laptop at once,
+  so a collision is resolved in the registry, never by a local edit —
+  `strictPort` makes Vite abort rather than move.
 - **Publishing is anticipated, not built.** `/s/...` for anything shareable, a
   `visibility` field from the first migration, share tokens rather than
   accounts. Note the cross-cutting case: a piece may be public while the
