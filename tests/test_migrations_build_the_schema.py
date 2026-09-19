@@ -21,6 +21,27 @@ from app.database import Base
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def head_revision() -> str:
+    """The chain's head, read from the revision files.
+
+    Derived, never written as a literal. These tests used to compare against
+    "0001_baseline", which meant the FIRST real migration this app ever added
+    would fail two tests that have nothing to do with it - and the failure
+    would name a revision id rather than the thing that was wrong.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    cfg = Config(str(ROOT / "alembic.ini"))
+    # script_location is relative to the cwd, not to the ini file, so an
+    # absolute ini path is not enough on its own. Same reason app/routers
+    # /health.py overrides it.
+    cfg.set_main_option("script_location", str(ROOT / "alembic"))
+    heads = ScriptDirectory.from_config(cfg).get_heads()
+    assert len(heads) == 1, f"expected one head, found {heads}"
+    return heads[0]
+
+
 def _admin_url(database: str) -> str:
     """settings.sqlalchemy_database_url with only the trailing db name swapped.
 
@@ -69,7 +90,7 @@ def test_upgrade_head_runs_against_an_empty_database(scratch_database):
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
         stamped = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert stamped == "0001_baseline"
+        assert stamped == head_revision()
 
         # Vacuous while there are no models, and deliberately so: it starts
         # biting the moment the first table is declared, which is when a
@@ -89,4 +110,7 @@ def test_there_is_exactly_one_head():
     assert result.returncode == 0, result.stderr
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert len(lines) == 1, result.stdout
-    assert "0001_baseline" in lines[0], result.stdout
+    # The command's answer must agree with the revision files' own. Both are
+    # Alembic's, so this is not much of a cross-check - but asserting a
+    # literal id here is what made every future migration fail this test.
+    assert head_revision() in lines[0], result.stdout
