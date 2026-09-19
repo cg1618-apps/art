@@ -18,4 +18,16 @@ as they bind this app:
 
 ## Decisions for this application
 
-None yet. The first will be the stack.
+- **FastAPI, PostgreSQL, React + Vite, Alembic** — the media tracker's stack.
+  Rejected: Django and a server-rendered frontend. **The stopwatch is the one
+  feature on this box that genuinely wants a real frontend**, being live session
+  state rather than a catalogue with notes, so the SPA choice is better
+  justified here than anywhere else.
+- **Cloudflare Access over the whole hostname, and no auth code in the app.**
+  One user, no accounts. Rejected: an app-level password, for the same reasons
+  as `travel`.
+- **Publishing is anticipated, not built.** `/s/...` for anything shareable, a
+  `visibility` field from the first migration, share tokens rather than
+  accounts. Note the cross-cutting case: a piece may be public while the
+  practice notes attached to it stay private, so visibility belongs on the
+  entity rather than on a section of the app.
