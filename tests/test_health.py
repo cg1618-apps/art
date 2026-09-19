@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routers import health
+from tests.test_migrations_build_the_schema import head_revision
 
 
 def test_it_reports_ok_when_the_schema_matches_the_code(monkeypatch):
@@ -61,7 +62,7 @@ def test_expected_revision_reads_the_real_alembic_ini():
     # alembic.ini existed would poison this; clear it first so the assertion
     # proves the real read, not a leftover.
     health.expected_revision.cache_clear()
-    assert health.expected_revision() == "0001_baseline"
+    assert health.expected_revision() == head_revision()
 
 
 def test_expected_revision_does_not_depend_on_the_working_directory(
@@ -74,4 +75,4 @@ def test_expected_revision_does_not_depend_on_the_working_directory(
     # failure is a 503 rather than an unhandled 500.
     monkeypatch.chdir(tmp_path)
     health.expected_revision.cache_clear()
-    assert health.expected_revision() == "0001_baseline"
+    assert health.expected_revision() == head_revision()
