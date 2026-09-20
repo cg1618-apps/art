@@ -50,6 +50,47 @@ as they bind this app:
   practice notes attached to it stay private, so visibility belongs on the
   entity rather than on a section of the app.
 
+## The catch-all serves real files, the way `media` does
+
+The SPA catch-all inherited from travel's skeleton answered **every** non-API
+path with `index.html`. That is correct for a client route and wrong for a file
+that actually exists in the bundle: `/favicon.svg` came back as the SPA's HTML
+under `text/html`, and the browser discarded it. Only `/assets` was mounted as
+`StaticFiles`, and Vite copies `frontend/public/` to the **root** of the bundle,
+not into `assets/` — so nothing served it. Nothing sits in front of this app
+either; cloudflared connects straight to uvicorn, so there was no proxy to cover
+the gap. The icon shipped in the repository and had never been served.
+
+**The fix is `media`'s resolve-and-confine block, adopted rather than
+redesigned**, per the platform's house-style rule that `media` is where a
+convention is looked up. The handler resolves `dist / full_path`, and serves it
+only when it is inside the dist directory, is not the directory itself, and is a
+real file; otherwise it falls back to `index.html`. This is art conforming to
+the platform, not one of this app's deliberate divergences — the stopwatch is
+where those are expected, and nothing about serving an icon is particular to
+art.
+
+The `api` and `health` prefix guards keep their place in front of it, and keep
+their loop: this app's health path is `/health`, so a mistyped probe must still
+404 rather than answer 200 with the bundle.
+
+Rejected: **special-casing the icon paths** — a list of `/favicon.svg`,
+`/favicon.ico`, `/robots.txt` and whatever comes next. It is shorter today and
+it is a list somebody has to remember to extend, with the same silent failure
+each time a file is added to `frontend/public/`. Rejected: **mounting the whole
+dist as `StaticFiles` with `html=True`**, which would serve the files but hand
+the client-route fallback to Starlette, and with it the `/api` and `/health`
+404 guards this app cannot give up.
+
+**The `.resolve()` + `is_relative_to()` + `is_file()` guard is load-bearing
+security, not tidiness.** `full_path` is user-controlled, and without the
+confinement `/..%2F.env` reads the app's own credentials from beside the bundle.
+`tests/test_spa_routing.py` asserts both halves — that a real file in the bundle
+is served as itself, and that a traversal attempt is not — and the `.env` file
+its traversal test writes is load-bearing: `is_file()` is False for a path that
+does not exist, so without a real secret to leak the test would pass against an
+unguarded handler.
+
 ## Structure
 
 Eight modules, built in this order. Each gets its own design pass immediately
