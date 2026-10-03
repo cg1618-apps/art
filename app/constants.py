@@ -30,6 +30,24 @@ class Visibility(StrEnum):
     PUBLIC = "public"
 
 
+class GoalStatus(StrEnum):
+    """Where a level stands. Set by hand: nothing derives it from the stages,
+    so a level can be passed on its test before every stage is ticked."""
+
+    PLANNED = "planned"
+    ACTIVE = "active"
+    ACHIEVED = "achieved"
+
+
+class StageStatus(StrEnum):
+    """Where a stage stands. `passed` is the only status that may carry a
+    date (`ck_stage_passed_on_iff_passed`)."""
+
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    PASSED = "passed"
+
+
 @dataclass(frozen=True)
 class OptionCategory:
     """One category of `system_option` rows.

@@ -7,6 +7,9 @@ from urllib.parse import urlparse
 # digit, which is a port on a bare host (`localhost:8000`), not a scheme.
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:(?!\d)")
 
+#: The name slots of every named row, mirrored by each `ck_<table>_has_a_name`.
+NAME_FIELDS = ("name_cn", "name_en", "name_alt")
+
 
 def normalise(value):
     """An empty form field is an absent value, not an empty string.
@@ -18,6 +21,14 @@ def normalise(value):
         return value
     value = value.strip()
     return value or None
+
+
+def require_a_name(model, message: str):
+    """A create body's half of `ck_<table>_has_a_name`. A PATCH is checked by
+    the service against the merged row instead (`services.common`)."""
+    if not any(getattr(model, field) for field in NAME_FIELDS):
+        raise ValueError(message)
+    return model
 
 
 def not_null(value, message: str):

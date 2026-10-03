@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
-from app.routers import health, notes, options
+from app.routers import goals, health, notes, options, stages
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DIST = BASE_DIR / "frontend_dist"
@@ -31,6 +31,8 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(health.router)
     app.include_router(options.router)
     app.include_router(notes.router)
+    app.include_router(goals.router)
+    app.include_router(stages.router)
 
     if dist.is_dir():
         # Conditional: a bundle small enough for Vite to inline every asset

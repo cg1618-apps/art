@@ -11,31 +11,12 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.constants import Visibility
-from app.schemas.common import clean_aliases, normalise, normalise_link, not_null
+from app.schemas.common import clean_aliases, normalise, not_null, require_a_name
 from app.schemas.option import OptionRef
+from app.schemas.resource import ResourceIn, ResourceResponse
 
 LIST_FIELDS = ("aliases", "topic_ids", "resources")
-NAME_FIELDS = ("name_cn", "name_en", "name_alt")
 NEEDS_A_NAME = "A note needs at least one name"
-
-
-class ResourceIn(BaseModel):
-    """No position: a resource's order is its place in the list."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str | None = None
-    url: str
-
-    @field_validator("url", mode="before")
-    @classmethod
-    def url_is_a_web_address(cls, value):
-        return normalise_link(value)
-
-    @field_validator("name", mode="before")
-    @classmethod
-    def blank_is_absent(cls, value):
-        return normalise(value)
 
 
 class NoteCreate(BaseModel):
@@ -66,9 +47,7 @@ class NoteCreate(BaseModel):
     @model_validator(mode="after")
     def at_least_one_name(self):
         # Mirrors ck_note_has_a_name.
-        if not any((self.name_cn, self.name_en, self.name_alt)):
-            raise ValueError(NEEDS_A_NAME)
-        return self
+        return require_a_name(self, NEEDS_A_NAME)
 
 
 class NoteUpdate(BaseModel):
@@ -107,12 +86,6 @@ class NoteUpdate(BaseModel):
     @classmethod
     def aliases_are_clean(cls, values: list[str] | None) -> list[str] | None:
         return None if values is None else clean_aliases(values)
-
-
-class ResourceResponse(BaseModel):
-    id: int
-    name: str | None = None
-    url: str
 
 
 class NoteSummary(BaseModel):
