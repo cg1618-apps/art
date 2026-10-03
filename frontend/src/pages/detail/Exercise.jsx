@@ -7,10 +7,15 @@
 //
 // Then its drills as cards - source, the round (unit × target), suggested
 // minutes, frequency, the Markdown instructions, the source links and
-// resources - each with 記錄 (a new record for that drill) and 編輯; and the
+// resources - each with 記錄 (a new record for that drill), 開始計時 and 編輯;
+// and the
 // exercise's records, directly or through a drill, newest first, under the
 // total minutes. 編輯 and 刪除 close the page; deleting an exercise that still
 // has drills or records is the server's 409, shown in the dialog.
+//
+// 開始計時 starts a countdown of the day's default length (lib/timer.js) with
+// the drill attached and goes to /timer. With a timer already there - only one
+// at a time - it just goes to /timer.
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -24,10 +29,36 @@ import ResourceList from '../../components/ResourceList'
 import { Button, Card, Chip, LinkButton, Section } from '../../components/ui/primitives'
 import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiQuery } from '../../hooks/useApi'
+import { useTimer } from '../../hooks/useTimer'
 import { drillAmount, minutesLabel, NO_STAGE_TITLE, stageTitle } from '../../lib/exercises'
 import { otherNames } from '../../lib/names'
+import { COUNTDOWN, defaultCountdownMinutes, startPayload } from '../../lib/timer'
 
 const INVALIDATE = [endpoints.exercises.list(), endpoints.options.list()]
+
+function StartTimerButton({ drill }) {
+  const { timer, start } = useTimer()
+  const navigate = useNavigate()
+  const [starting, setStarting] = useState(false)
+
+  async function begin() {
+    if (!timer) {
+      setStarting(true)
+      try {
+        await start(startPayload({ mode: COUNTDOWN, minutes: defaultCountdownMinutes(), drillId: drill.id }))
+      } catch {
+        // A 409 is a timer started elsewhere; /timer shows it, or the error.
+      }
+    }
+    navigate('/timer')
+  }
+
+  return (
+    <Button size="sm" onClick={begin} disabled={starting} aria-label={`為「${drill.display_name}」開始計時`}>
+      開始計時
+    </Button>
+  )
+}
 
 function DrillCard({ drill }) {
   const facts = [drillAmount(drill), minutesLabel(drill.suggested_minutes), drill.frequency].filter(Boolean)
@@ -49,6 +80,7 @@ function DrillCard({ drill }) {
           >
             記錄
           </LinkButton>
+          <StartTimerButton drill={drill} />
           <LinkButton
             to={`/drills/${drill.id}/edit`}
             size="sm"

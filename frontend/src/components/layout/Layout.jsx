@@ -8,9 +8,18 @@
 // The active section is marked with aria-current="page" and styled from that
 // attribute, so what a screen reader announces and what the eye sees cannot
 // disagree. See lib/nav.js for the match.
+//
+// The frame is also where the timer lives (components/timer/): TimerProvider
+// is around every page, and while a timer exists its chip sits at the right
+// of the top bar. On a phone the top bar holds only the chip, and shows only
+// while there is one - the sections are in the bar at the bottom.
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
+import { useTimer } from '../../hooks/useTimer'
+import { cx } from '../../lib/cx'
 import { activeSection, SECTIONS } from '../../lib/nav'
+import TimerChip from '../timer/TimerChip'
+import TimerProvider from '../timer/TimerProvider'
 
 function NavItems({ active, className }) {
   return SECTIONS.map((section) => (
@@ -26,27 +35,46 @@ function NavItems({ active, className }) {
 }
 
 export default function Layout() {
+  return (
+    <TimerProvider>
+      <Frame />
+    </TimerProvider>
+  )
+}
+
+function Frame() {
   const { pathname } = useLocation()
   const active = activeSection(pathname)
+  const { timer } = useTimer()
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 hidden border-b border-border bg-canvas/95 backdrop-blur md:block">
-        <nav aria-label="主要" className="mx-auto flex max-w-5xl items-center gap-8 px-6 py-3">
-          <Link
-            to="/"
-            className="font-display text-2xl font-bold leading-none text-brand"
-            aria-label="首頁"
-          >
-            畫
-          </Link>
-          <div className="flex items-center gap-1">
-            <NavItems
-              active={active}
-              className="rounded-md px-3 py-1.5 font-display text-[0.95rem] text-text-muted transition-colors hover:text-text aria-[current=page]:bg-brand-soft aria-[current=page]:text-brand"
-            />
+      <header
+        className={cx(
+          'sticky top-0 z-30 border-b border-border bg-canvas/95 backdrop-blur md:block',
+          timer ? 'block' : 'hidden',
+        )}
+      >
+        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-2 md:px-6 md:py-3">
+          <nav aria-label="主要" className="flex items-center gap-8">
+            <Link
+              to="/"
+              className="font-display text-2xl font-bold leading-none text-brand"
+              aria-label="首頁"
+            >
+              畫
+            </Link>
+            <div className="hidden items-center gap-1 md:flex">
+              <NavItems
+                active={active}
+                className="rounded-md px-3 py-1.5 font-display text-[0.95rem] text-text-muted transition-colors hover:text-text aria-[current=page]:bg-brand-soft aria-[current=page]:text-brand"
+              />
+            </div>
+          </nav>
+          <div className="ml-auto">
+            <TimerChip />
           </div>
-        </nav>
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pt-5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:px-6 md:pt-8 md:pb-12">
