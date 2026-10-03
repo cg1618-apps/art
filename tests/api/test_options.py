@@ -17,7 +17,7 @@ def create_option(client, **body):
 def test_categories_are_the_registry_in_order(client):
     body = client.get("/api/options/categories").json()
     assert [c["key"] for c in body] == [
-        "note_category", "topic", "method", "source", "location", "tool",
+        "note_category", "topic", "method", "source", "location", "tool", "reference_group",
     ]
     assert [c["key"] for c in body] == list(OPTION_CATEGORIES)
     assert body[0] == {
@@ -156,7 +156,7 @@ def test_a_missing_option_is_404(client):
 
 
 def _note_using(db, *, category=None, topics=()):
-    note = Note(name_cn="筆記", category_id=category.id if category else None)
+    note = Note(name="筆記", category_id=category.id if category else None)
     db.add(note)
     db.flush()
     for topic in topics:
@@ -213,7 +213,7 @@ def test_the_right_count_deletes_cascading_topics_and_nulling_categories(client,
     assert filed_now["category"] is None
     assert filed_now["topics"] == []
     # The notes themselves survive.
-    assert filed_now["display_name"] == "筆記"
+    assert filed_now["name"] == "筆記"
 
 
 # --- the references the Record + Exercise module adds -------------------------

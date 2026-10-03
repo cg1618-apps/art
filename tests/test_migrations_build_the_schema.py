@@ -570,3 +570,121 @@ def test_the_migrated_timer_holds_at_most_one_row(scratch_database):
     with pytest.raises(IntegrityError, match="uq_active_timer_single"), engine.begin() as conn:
         conn.execute(insert)
     engine.dispose()
+
+
+def _note_columns(database_url: str) -> set[str]:
+    engine = create_engine(database_url)
+    with engine.connect() as conn:
+        columns = {c["name"] for c in inspect(conn).get_columns("note")}
+    engine.dispose()
+    return columns
+
+
+def test_note_name_keeps_the_first_slot_and_moves_the_other_names_to_the_remark(
+    scratch_database,
+):
+    """0007's data path, on notes written at 0006: every name typed survives,
+    either as the name or in the remark's 其他名稱 line."""
+    _upgrade(scratch_database, "0006_timer_draft")
+    engine = create_engine(scratch_database)
+    with engine.begin() as conn:
+        def note(name_cn, name_en, name_alt, remark=None, aliases=()):
+            note_id = conn.execute(
+                text(
+                    "INSERT INTO note (name_cn, name_en, name_alt, remark)"
+                    " VALUES (:cn, :en, :alt, :remark) RETURNING id"
+                ),
+                {"cn": name_cn, "en": name_en, "alt": name_alt, "remark": remark},
+            ).scalar()
+            for value in aliases:
+                conn.execute(
+                    text("INSERT INTO note_alias (note_id, value) VALUES (:id, :value)"),
+                    {"id": note_id, "value": value},
+                )
+            return note_id
+
+        only_cn = note("透視", None, None)
+        full = note("消失點", "vanishing point", "VP", remark="再補例子", aliases=["滅點", "VP"])
+        only_en = note(None, "gesture", None, aliases=["動態"])
+        only_alt = note(None, None, "GD")
+    engine.dispose()
+
+    _upgrade(scratch_database, "0007_note_name")
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        rows = {
+            note_id: (name, remark)
+            for note_id, name, remark in conn.execute(text("SELECT id, name, remark FROM note"))
+        }
+        tables = set(inspect(conn).get_table_names())
+    engine.dispose()
+
+    assert rows[only_cn] == ("透視", None)  # nothing else to keep: the remark is untouched
+    # VP is both a slot and an alias: listed once.
+    assert rows[full] == ("消失點", "再補例子\n其他名稱：vanishing point、VP、滅點")
+    assert rows[only_en] == ("gesture", "其他名稱：動態")
+    assert rows[only_alt] == ("GD", None)
+    assert "note_alias" not in tables
+    assert not {"name_cn", "name_en", "name_alt"} & _note_columns(scratch_database)
+
+    _downgrade(scratch_database, "0006_timer_draft")
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        back = dict(conn.execute(text("SELECT id, name_cn FROM note")).all())
+        tables = set(inspect(conn).get_table_names())
+    engine.dispose()
+    assert back == {only_cn: "透視", full: "消失點", only_en: "gesture", only_alt: "GD"}
+    assert "note_alias" in tables
+    assert "name" not in _note_columns(scratch_database)
+
+
+def test_the_migrated_note_name_refuses_a_blank(scratch_database):
+    """The migration's own check, which `create_all` never builds. The first
+    insert is the mirror."""
+    from sqlalchemy.exc import IntegrityError
+
+    _upgrade(scratch_database)
+    engine = create_engine(scratch_database)
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO note (name) VALUES ('透視')"))
+    with pytest.raises(IntegrityError, match="ck_note_name_not_blank"), engine.begin() as conn:
+        conn.execute(text("INSERT INTO note (name) VALUES ('  ')"))
+    engine.dispose()
+
+
+def test_references_downgrade_and_upgrade_again(scratch_database):
+    """Down to 0007 drops the two tables and the category's values, and puts
+    the old category check back; up again accepts the category."""
+    from sqlalchemy.exc import IntegrityError
+
+    _upgrade(scratch_database)
+    engine = create_engine(scratch_database)
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO system_option (category, value) VALUES ('reference_group', '表情')")
+        )
+    engine.dispose()
+
+    _downgrade(scratch_database, "0007_note_name")
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        tables = set(inspect(conn).get_table_names())
+        groups = conn.execute(
+            text("SELECT count(*) FROM system_option WHERE category = 'reference_group'")
+        ).scalar()
+    assert not {"reference", "reference_group"} & tables
+    assert "note" in tables
+    assert groups == 0
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO system_option (category, value) VALUES ('reference_group', 'x')")
+        )
+    engine.dispose()
+
+    _upgrade(scratch_database)
+    engine = create_engine(scratch_database)
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO system_option (category, value) VALUES ('reference_group', 'x')")
+        )
+    engine.dispose()

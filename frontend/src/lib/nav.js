@@ -1,8 +1,9 @@
 // Frontend: the sections of the app and which one a path belongs to.
 //
-// food's shape. The navigation is 路線圖 · 練習 · 練法 · 紀錄 · 計時 · 筆記 · 選項; each later
-// module adds one entry here, and both navigation bars draw from this list - the
-// phone's bottom bar has one column per entry (components/layout/Layout.jsx).
+// food's shape. The navigation is 路線圖 · 練習 · 練法 · 紀錄 · 計時 · 參考 · 筆記 · 選項;
+// each later module adds one entry here, and both navigation bars draw from this
+// list - on a phone the bottom bar, which scrolls sideways once the entries
+// outgrow the screen (components/layout/Layout.jsx).
 
 export const SECTIONS = [
   { key: 'roadmap', label: '路線圖', to: '/roadmap', prefixes: ['/roadmap'] },
@@ -10,6 +11,7 @@ export const SECTIONS = [
   { key: 'drills', label: '練法', to: '/drills', prefixes: ['/drills'] },
   { key: 'records', label: '紀錄', to: '/records', prefixes: ['/records'] },
   { key: 'timer', label: '計時', to: '/timer', prefixes: ['/timer'] },
+  { key: 'references', label: '參考', to: '/references', prefixes: ['/references'] },
   { key: 'notes', label: '筆記', to: '/notes', prefixes: ['/notes'] },
   { key: 'options', label: '選項', to: '/options', prefixes: ['/options'] },
 ]

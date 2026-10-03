@@ -9,17 +9,20 @@ import Layout from './components/layout/Layout'
 import DrillDetail from './pages/detail/Drill'
 import ExerciseDetail from './pages/detail/Exercise'
 import NoteDetail from './pages/detail/Note'
+import ReferenceDetail from './pages/detail/Reference'
 import StageDetail from './pages/detail/Stage'
 import DrillForm from './pages/edit/DrillForm'
 import ExerciseForm from './pages/edit/ExerciseForm'
 import GoalForm from './pages/edit/GoalForm'
 import NoteForm from './pages/edit/NoteForm'
 import RecordForm from './pages/edit/RecordForm'
+import ReferenceForm from './pages/edit/ReferenceForm'
 import StageForm from './pages/edit/StageForm'
 import DrillLibrary from './pages/library/DrillLibrary'
 import ExerciseLibrary from './pages/library/ExerciseLibrary'
 import NoteLibrary from './pages/library/NoteLibrary'
 import RecordLibrary from './pages/library/RecordLibrary'
+import ReferenceLibrary from './pages/library/ReferenceLibrary'
 import NotFound from './pages/NotFound'
 import Options from './pages/options/Options'
 import Roadmap from './pages/roadmap/Roadmap'
@@ -55,6 +58,11 @@ export default function AppRoutes() {
 
         {/* One timer at a time, held by the server; its chip is in Layout. */}
         <Route path="/timer" element={<Timer />} />
+
+        <Route path="/references" element={<ReferenceLibrary />} />
+        <Route path="/references/new" element={<ReferenceForm />} />
+        <Route path="/references/:id" element={<ReferenceDetail />} />
+        <Route path="/references/:id/edit" element={<ReferenceForm />} />
 
         <Route path="/notes" element={<NoteLibrary />} />
         <Route path="/notes/new" element={<NoteForm />} />

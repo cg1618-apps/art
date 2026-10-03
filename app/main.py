@@ -16,6 +16,7 @@ from app.routers import (
     notes,
     options,
     records,
+    references,
     stages,
     timer,
 )
@@ -47,6 +48,7 @@ def create_app(dist: Path = DIST) -> FastAPI:
     app.include_router(drills.router)
     app.include_router(records.router)
     app.include_router(timer.router)
+    app.include_router(references.router)
 
     if dist.is_dir():
         # Conditional: a bundle small enough for Vite to inline every asset

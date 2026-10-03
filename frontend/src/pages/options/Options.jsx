@@ -4,7 +4,8 @@
 // in the registry's order: the category's label, its description - what the
 // category is for, said before its values - then a table of its values with
 // what each means (description), a note to yourself (remark), its order and
-// how many notes use it. Add, edit and delete happen in place.
+// how many places use it - notes, exercises, drills, records, references. Add,
+// edit and delete happen in place.
 //
 // A delete states its count before it happens and sends that count back as
 // ?in_use=<n>; the server recounts and refuses with a 409 when the number
@@ -24,8 +25,8 @@ import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { useApiMutation, useApiQuery, useOptionCategories } from '../../hooks/useApi'
 import { blankToNull, integerOrNull } from '../../lib/rowList'
 
-// An option change moves what every note shows.
-const INVALIDATE = [endpoints.options.list(), endpoints.notes.list()]
+// An option change moves what every note and reference shows.
+const INVALIDATE = [endpoints.options.list(), endpoints.notes.list(), endpoints.references.list()]
 
 const CELL = 'px-2 py-1.5 align-top'
 

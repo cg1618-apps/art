@@ -43,6 +43,12 @@ from app.schemas.record import (
     RecordResponse,
     RecordUpdate,
 )
+from app.schemas.reference import (
+    ReferenceCreate,
+    ReferenceResponse,
+    ReferenceSummary,
+    ReferenceUpdate,
+)
 from app.schemas.resource import ResourceIn, ResourceResponse
 from app.schemas.timer import TimerCreate, TimerResponse, TimerUpdate
 
@@ -75,6 +81,10 @@ __all__ = [
     "RecordCreate",
     "RecordResponse",
     "RecordUpdate",
+    "ReferenceCreate",
+    "ReferenceResponse",
+    "ReferenceSummary",
+    "ReferenceUpdate",
     "ResourceIn",
     "ResourceResponse",
     "StageCreate",

@@ -2,7 +2,7 @@
 
 Tier 1 of the three option tiers: a list lives here when code branches on its
 exact value, and changing it is a code change. The open vocabularies the owner
-edits - a note category, a topic, a method - are tier 2, `system_option` rows
+edits - a note category, a topic, a method, a reference group - are tier 2, `system_option` rows
 managed on the Options page; the categories those rows are filed under are
 tier 1 and so are registered here.
 
@@ -95,6 +95,7 @@ METHOD = "method"
 SOURCE = "source"
 LOCATION = "location"
 TOOL = "tool"
+REFERENCE_GROUP = "reference_group"
 
 #: In the order the Options page shows them. A key here is the only thing
 #: `ck_system_option_category` accepts, so removing one is a migration.
@@ -130,6 +131,11 @@ OPTION_CATEGORIES: dict[str, OptionCategory] = {
             key=TOOL,
             label="工具",
             description="一次練習用什麼畫的：哪個軟體，或是紙筆。由練習紀錄使用，可以不填。",
+        ),
+        OptionCategory(
+            key=REFERENCE_GROUP,
+            label="參考分組",
+            description="把參考連結分組，例如表情、配件、姿勢。一個參考可以放在多個分組，也可以不分組。",
         ),
     )
 }

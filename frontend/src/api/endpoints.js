@@ -103,6 +103,17 @@ export const endpoints = {
     record: () => `${API}/timer/record`,
     remove: () => `${API}/timer`,
   },
+  // 參考: links worth keeping, filed into 參考分組 groups. GET list() takes
+  // ?q= (the name, the link or the notes), repeated ?group_id= ("any of") and
+  // ?no_group=true; ordered by name. Each summary carries its groups and a
+  // one-line notes_excerpt; detail(id) carries the notes in full.
+  references: {
+    list: () => `${API}/references`,
+    detail: (id) => `${API}/references/${id}`,
+    create: () => `${API}/references`,
+    update: (id) => `${API}/references/${id}`,
+    remove: (id) => `${API}/references/${id}`,
+  },
   health: () => '/health',
 }
 
