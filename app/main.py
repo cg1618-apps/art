@@ -6,9 +6,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import logging_config
+from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
-from app.routers import health
+from app.routers import health, notes, options
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DIST = BASE_DIR / "frontend_dist"
@@ -26,7 +26,11 @@ def create_app(dist: Path = DIST) -> FastAPI:
     # Added first, so it is the OUTERMOST middleware and the id is set before
     # anything below it can log.
     app.add_middleware(RequestIdMiddleware)
+    errors.install(app)
+
     app.include_router(health.router)
+    app.include_router(options.router)
+    app.include_router(notes.router)
 
     if dist.is_dir():
         # Conditional: a bundle small enough for Vite to inline every asset
@@ -41,7 +45,7 @@ def create_app(dist: Path = DIST) -> FastAPI:
         def spa(full_path: str):
             """Every non-API path serves the bundle, so client routing works.
 
-            Registered AFTER the health router, which is what stops it
+            Registered AFTER the API routers, which is what stops it
             swallowing a REGISTERED route: had this route been added first, it
             would match /health before the health router ever got a turn.
 
