@@ -17,6 +17,8 @@ Tailwind 4 with `food`'s design tokens, Vitest. Why `food`'s and not
 | `src/components/forms/` | `OptionPicker`, `ResourceRows` (the name + link row editor every form with resources uses), `DeleteDialog`, `FormActions` |
 | `src/components/ResourceList.jsx` | resources on a detail page |
 | `src/components/RecordList.jsx` | records as rows, used by the records, exercise and stage pages |
+| `src/components/forms/ActivitySelect.jsx` | an exercise, then optionally one of its drills; the record form and the timer use it |
+| `src/lib/timer.js`, `src/hooks/useTimer.js`, `src/components/timer/` | the timer's arithmetic and formatting, its context, and the top bar chip |
 | `src/components/forms/RoadmapSelect.jsx` | picks a stage, or a stage or a level for a test |
 | `src/lib/records.js`, `src/lib/exercises.js` | every API field those pages read or send, in one place each |
 | `src/components/ui/` | `Dialog`, form and display primitives, loading / error / empty states |
@@ -44,6 +46,7 @@ whole hostname, so every page is the owner's.
 | `/drills/new?exercise=`, `/drills/:id/edit` | drill form: source, source links and resources as two row lists |
 | `/records` | grouped by date, newest first, each day's total (of the records shown, so it follows the filters) and this week's total, Monday to Sunday, from the summary; kind and exercise filters in the URL |
 | `/records/new`, `/records/:id/edit` | date (today), location (the most recent record's), tool (Clip Studio Paint), an exercise then optionally one of its drills (`?drill=` or `?exercise=` preselects), kind, a stage or level when 測驗, method with descriptions, minutes, references, notes. The defaults fill only untouched fields |
+| `/timer` | with no timer, a start form: stopwatch or countdown, 10 / 30 minutes or a custom length (the default by weekday: 10 Monday to Friday, 30 at the weekend — a constant in `lib/timer.js` until Schedule owns it), and an optional exercise then drill. With one: large digits, the activity, pause / resume, 停止, 捨棄. A countdown past zero keeps counting as `+m:ss` and plays one short tone |
 | `/options` | one section per category: its label and description, then its values with description, remark, order and how many places use each (notes, exercises, drills, records). Add and edit in place; delete opens a dialog stating the count and sends it with the request. If the count changed, the dialog shows the new one and asks again |
 
 **Every option picker shows the value's description** and links to
@@ -57,6 +60,24 @@ tab. A resource whose URL is not http or https is shown as text, not a link.
 
 `npm test` runs Vitest. Page tests go through the real routes with `fetch`
 mocked. `Markdown.test.jsx` holds the two safety properties above.
+
+## The timer
+
+The server holds the one running timer; the browser only ticks.
+`TimerProvider` (inside `Layout`, so every page has it) reads `/api/timer` on
+focus and every 30 seconds and ticks each second while running, offsetting its
+clock by the server's `now`. While a timer exists:
+
+- the top bar shows a chip with the activity and the time — on a phone too —
+  and 待記錄 once it is stopped;
+- the tab title carries the time;
+- 開始計時 on a drill card starts a countdown of the day's default with that
+  drill, or opens `/timer` if a timer already exists.
+
+停止 opens `/records/new?from=timer`: the ordinary record form, prefilled with
+the minutes (rounded, at least 1), the activity and the date the timer
+started, saving through `/api/timer/record`. Over three hours it warns beside
+the duration. Leaving the form keeps the timer stopped, so nothing is lost.
 
 ## How the built bundle is served
 

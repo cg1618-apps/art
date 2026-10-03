@@ -105,6 +105,29 @@ test.
 - Deleting a stage or goal named by records is a 409 `{ detail, records }`; a
   goal with stages keeps its `{ detail, stages }`, checked first.
 
+## Timer
+
+`TimerResponse`: `{ id, mode, target_seconds, state, started_at,
+running_since, elapsed_seconds, stopped_at, now, activity }`. `state` is
+`running`, `paused` or `stopped`; `now` is the database clock when the response
+was read, so a browser computes the live figure as `elapsed_seconds + (now −
+running_since)` against its own clock offset by `now`.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/timer` | | the timer, or `null` |
+| POST | `/api/timer` | `{ mode, target_seconds?, drill_id?, exercise_id? }` | 201, running. 409 while any timer exists, a stopped one included |
+| PATCH | `/api/timer` | `{ target_seconds?, drill_id?, exercise_id? }` | `mode` cannot change |
+| POST | `/api/timer/pause` | | 409 unless running |
+| POST | `/api/timer/resume` | | 409 unless paused |
+| POST | `/api/timer/stop` | | the final `elapsed_seconds`; 409 if already stopped |
+| POST | `/api/timer/record` | a record write, as `POST /api/records` | 201 with the record, and the timer is gone — one transaction. 409 unless stopped; a refused record leaves the timer as it was |
+| DELETE | `/api/timer` | | 204 in any state (捨棄) |
+
+Every route but `GET` and `POST /api/timer` is 404 when there is no timer. A
+countdown needs a target and a stopwatch refuses one; the activity follows the
+record rules.
+
 ## Options
 
 `OptionResponse`: `{ id, category, value, description, remark, sort_order, in_use }`.

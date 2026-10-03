@@ -27,10 +27,11 @@ media tracker's by default.
 
 ## Status
 
-**Notes + Options, Goals + Roadmap and Record + Exercise are built** —
-modules 1, 2, 3 and 5 in `docs/notes/decisions.md`, "Structure". Schedule,
-Timer, Tool and Reference each wait for a design discussion with the owner
-first.
+**Notes + Options, Goals + Roadmap, Record + Exercise and Timer are built** —
+modules 1, 2, 3, 5 and 6 in `docs/notes/decisions.md`, "Structure". Schedule,
+Tool and Reference each wait for a design discussion with the owner first.
+The timer's shape is the deliberate divergence this file anticipated; its
+reasons are in `decisions.md`.
 
 Each module gets its own design pass immediately before it is built —
 brainstorm into `docs/superpowers/specs/`, then plan, then implement.

@@ -18,6 +18,8 @@ the tier: **does code branch on the exact value?**
 | `GoalStatus` | `planned`, `active`, `achieved` (計畫中, 進行中, 已達成) | `goal.status` |
 | `StageStatus` | `not_started`, `in_progress`, `passed` (未開始, 進行中, 已通過) | `stage.status` |
 | `RecordKind` | `practice`, `piece`, `test` (練習, 作品, 測驗) | `record.kind`; a test names a stage or a goal |
+| `TimerMode` | `stopwatch`, `countdown` | `active_timer.mode` |
+| `TimerState` | `running`, `paused`, `stopped` | derived for responses, never stored |
 | `OPTION_CATEGORIES` | `note_category`, `topic`, `method`, `source`, `location`, `tool` | `system_option.category`, and the Options page's section order |
 
 **Categories are registered, not typed.** Each has a key, a label and a
