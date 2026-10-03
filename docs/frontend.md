@@ -1,9 +1,48 @@
 # Frontend
 
-React + Vite. No module is built yet, so there are no pages or components to
-describe; the conventions, when there are, are `media`'s, per the platform's
-house-style section. What is here is what is true of the frontend now: how the
-built bundle reaches a browser.
+React + Vite, with `food`'s foundation: react-router 7, TanStack Query,
+Tailwind 4 with `food`'s design tokens, Vitest. Why `food`'s and not
+`media`'s is in `notes/decisions.md`. UI text is Traditional Chinese.
+
+## Layout
+
+| Path | Holds |
+| --- | --- |
+| `src/routes.jsx` | the route table |
+| `src/api/client.js` | **the only file that calls `fetch`**; errors carry `.status` and `.body` |
+| `src/api/endpoints.js` | every API URL |
+| `src/hooks/useApi.js` | `useApiQuery`, `useApiMutation`, `useOptionCategories`, `useOptions(category)` |
+| `src/hooks/useUrlFilters.js` | search and filters kept in the URL: typing replaces the history entry (debounced), a filter click pushes one |
+| `src/components/layout/` | `Layout` (top nav from `lib/nav.js`), `LibraryLayout`, `FilterPanel` |
+| `src/components/forms/` | `OptionPicker`, `DeleteDialog`, `FormActions` |
+| `src/components/ui/` | `Dialog`, form and display primitives, loading / error / empty states |
+| `src/components/Markdown.jsx` | the one Markdown renderer |
+| `src/pages/<library|detail|edit|options>/` | one page per file |
+
+There is no route guard and no `/edit` prefix: Cloudflare Access gates the
+whole hostname, so every page is the owner's.
+
+## Pages
+
+| Route | Page |
+| --- | --- |
+| `/` | redirects to `/notes` until a later module owns the home page |
+| `/notes` | search box and filter chips for category and topic, all in the URL; filtering is server-side; cards show the name, category, topics and summary |
+| `/notes/:id` | the note: summary, Markdown body, resources, remark, delete. Aliases are not shown: they exist to be searched |
+| `/notes/new`, `/notes/:id/edit` | one form: three names, aliases in one box (split on `,`, `，`, `、` and newlines), category, topics, summary, body, resources as name + link rows moved with ↑/↓, remark, visibility |
+| `/options` | one section per category: its label and description, then its values with description, remark, order and how many notes use each. Add and edit in place; delete opens a dialog stating the count and sends it with the request. If the count changed, the dialog shows the new one and asks again |
+
+**Every option picker shows the value's description** and links to
+`/options`, so what a value means is visible where it is chosen.
+
+**Markdown** (`components/Markdown.jsx`) renders GitHub-flavoured Markdown with
+no raw HTML; a `javascript:` link renders inert and other links open in a new
+tab. A resource whose URL is not http or https is shown as text, not a link.
+
+## Tests
+
+`npm test` runs Vitest. Page tests go through the real routes with `fetch`
+mocked. `Markdown.test.jsx` holds the two safety properties above.
 
 ## How the built bundle is served
 
