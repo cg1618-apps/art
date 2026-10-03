@@ -14,7 +14,8 @@ Tailwind 4 with `food`'s design tokens, Vitest. Why `food`'s and not
 | `src/hooks/useApi.js` | `useApiQuery`, `useApiMutation`, `useOptionCategories`, `useOptions(category)` |
 | `src/hooks/useUrlFilters.js` | search and filters kept in the URL: typing replaces the history entry (debounced), a filter click pushes one |
 | `src/components/layout/` | `Layout` (top nav from `lib/nav.js`), `LibraryLayout`, `FilterPanel` |
-| `src/components/forms/` | `OptionPicker`, `DeleteDialog`, `FormActions` |
+| `src/components/forms/` | `OptionPicker`, `ResourceRows` (the name + link row editor every form with resources uses), `DeleteDialog`, `FormActions` |
+| `src/components/ResourceList.jsx` | resources on a detail page |
 | `src/components/ui/` | `Dialog`, form and display primitives, loading / error / empty states |
 | `src/components/Markdown.jsx` | the one Markdown renderer |
 | `src/pages/<library|detail|edit|options>/` | one page per file |
@@ -26,7 +27,11 @@ whole hostname, so every page is the owner's.
 
 | Route | Page |
 | --- | --- |
-| `/` | redirects to `/notes` until a later module owns the home page |
+| `/` | redirects to `/roadmap` |
+| `/roadmap` | every level in order — code, name, status, description, test — with its stages as rows: number, name, status, test. The **current stage**, the first not passed in roadmap order, is marked. Each row changes its status in place (passing it records today) and moves with ↑/↓ |
+| `/roadmap/goals/new`, `/roadmap/goals/:id/edit` | goal form; the date appears only for 已達成. Saving or deleting returns to the roadmap |
+| `/roadmap/stages/:id` | a stage: description, test, resources, remark, status, its level |
+| `/roadmap/stages/new?goal=:id`, `/roadmap/stages/:id/edit` | stage form; changing the level puts the stage last in it |
 | `/notes` | search box and filter chips for category and topic, all in the URL; filtering is server-side; cards show the name, category, topics and summary |
 | `/notes/:id` | the note: summary, Markdown body, resources, remark, delete. Aliases are not shown: they exist to be searched |
 | `/notes/new`, `/notes/:id/edit` | one form: three names, aliases in one box (split on `,`, `，`, `、` and newlines), category, topics, summary, body, resources as name + link rows moved with ↑/↓, remark, visibility |

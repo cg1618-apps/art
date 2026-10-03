@@ -23,6 +23,35 @@ reads and writes share one prefix. Tables are in
   `null` or `""` to clear them.
 - Blank strings are stored as NULL; text is trimmed.
 
+## Goals and stages
+
+`GoalResponse`: `{ id, code, display_name, name_cn, name_en, name_alt,
+position, description, test, status, achieved_on, remark, stages }`, where
+`stages` are `StageSummary`: `{ id, number, display_name, name_cn, name_en,
+name_alt, position, description, test, status, passed_on }`. `number` counts
+across the whole roadmap.
+
+`StageResponse`: the summary plus `{ goal: { id, code, display_name }, remark,
+resources }`.
+
+| Method | Path | Body / query | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/goals` | | every goal in order, each with its stages — the whole roadmap |
+| GET | `/api/goals/{id}` | | `GoalResponse` |
+| POST | `/api/goals` | `{ code, name_cn?, name_en?, name_alt?, position?, description?, test?, status?, achieved_on?, remark? }` | 201. A duplicate `code` is 409 |
+| PATCH | `/api/goals/{id}` | the same fields | |
+| DELETE | `/api/goals/{id}` | | 204; 409 `{ detail, stages }` while it has stages |
+| GET | `/api/stages/{id}` | | `StageResponse` |
+| POST | `/api/stages` | `{ goal_id, names…, position?, description?, test?, status?, passed_on?, remark?, resources? }` | 201 |
+| PATCH | `/api/stages/{id}` | the same fields | A new `goal_id` moves the stage, last in that goal unless `position` is sent |
+| DELETE | `/api/stages/{id}` | | 204 |
+
+- No `position` on create puts the row last. `position` is stored as sent;
+  nothing else shifts.
+- Setting `status` away from `achieved` / `passed` clears the date. Sending a
+  date with any other status is a 422.
+- Dates are `YYYY-MM-DD`.
+
 ## Options
 
 `OptionResponse`: `{ id, category, value, description, remark, sort_order, in_use }`.
