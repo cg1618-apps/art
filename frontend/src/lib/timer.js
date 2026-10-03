@@ -9,8 +9,9 @@
 // "server now" is the browser's clock shifted by the offset measured when the
 // response arrived (`now` minus the moment it was received). A laptop whose
 // clock is minutes off therefore still agrees with the phone.
-import { localToday } from './roadmap'
-import { emptyRecordForm } from './records'
+import { localToday, parseTarget, targetValue } from './roadmap'
+import { emptyRecordForm, UNCHOSEN } from './records'
+import { integerOrNull, keyed } from './rowList'
 
 export const STOPWATCH = 'stopwatch'
 export const COUNTDOWN = 'countdown'
@@ -173,21 +174,78 @@ export function isLongTimer(timer) {
   return (timer?.elapsed_seconds ?? 0) > LONG_TIMER_SECONDS
 }
 
+/** The timer's record draft, `{ kind, stage_id, … }` with only the keys the owner chose, or null. */
+export function timerDraft(timer) {
+  return timer?.draft ?? null
+}
+
 /**
- * The record form a stopped timer opens with: its minutes, its drill or
- * exercise, the local date it started, and the usual defaults.
+ * The record form a timer opens with: its minutes, its drill or exercise, the
+ * local date it started, its record draft, and the usual defaults for what
+ * the draft leaves out.
  */
 export function timerRecordForm(timer) {
   const exercise = timerExercise(timer)
   const drill = timerDrill(timer)
   const started = timer.started_at ? new Date(timer.started_at) : new Date()
-  return {
+  const form = {
     ...emptyRecordForm({
       today: localToday(started),
       exercise: exercise ? String(exercise.id) : null,
       drill: drill ? String(drill.id) : null,
     }),
     duration_minutes: String(roundToMinutes(timer.elapsed_seconds)),
+  }
+  return withDraft(form, timerDraft(timer))
+}
+
+const has = (draft, key) => Object.prototype.hasOwnProperty.call(draft, key)
+
+/**
+ * `form` with a stored draft's keys applied. A key the draft does not carry
+ * leaves the form's value - for the location and the tool, UNCHOSEN, so their
+ * defaults still apply.
+ */
+export function withDraft(form, draft) {
+  if (!draft) return form
+  const next = { ...form }
+  if (has(draft, 'kind') && draft.kind) next.kind = draft.kind
+  if (draft.goal_id != null) next.target = targetValue('goal', draft.goal_id)
+  else if (draft.stage_id != null) next.target = targetValue('stage', draft.stage_id)
+  for (const field of ['method_id', 'location_id', 'tool_id']) {
+    if (has(draft, field)) next[field] = draft[field]
+  }
+  if (Array.isArray(draft.references)) {
+    next.references = draft.references.map((row) => keyed({ name: row.name ?? '', url: row.url ?? '' }))
+  }
+  if (has(draft, 'notes')) next.notes = draft.notes ?? ''
+  return next
+}
+
+/**
+ * The record form as PATCH /api/timer's body: the activity, and the rest as
+ * the draft. The activity is sent as a record's is - with a drill the
+ * exercise is null. The draft keeps the form as typed (a reference row with
+ * no link yet, a test with no target yet) and leaves out a location or tool
+ * still UNCHOSEN, so it is not pinned to today's default. The target is kept
+ * whatever the kind, so switching away from 測驗 and back does not lose it;
+ * the record's own payload drops it unless the kind is a test.
+ */
+export function draftPayload(form) {
+  const drillId = integerOrNull(form.drill_id)
+  const draft = {
+    kind: form.kind,
+    ...parseTarget(form.target),
+    method_id: form.method_id,
+  }
+  if (form.location_id !== UNCHOSEN) draft.location_id = form.location_id
+  if (form.tool_id !== UNCHOSEN) draft.tool_id = form.tool_id
+  draft.references = form.references.map((row) => ({ name: row.name ?? '', url: row.url ?? '' }))
+  draft.notes = form.notes
+  return {
+    drill_id: drillId,
+    exercise_id: drillId === null ? integerOrNull(form.exercise_id) : null,
+    draft,
   }
 }
 

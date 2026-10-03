@@ -61,9 +61,14 @@ export const endpoints = {
     update: (id) => `${API}/exercises/${id}`,
     remove: (id) => `${API}/exercises/${id}`,
   },
-  // 練法: one prescribed way of doing an exercise. There is no drill list to
-  // read - an exercise's detail carries its drills - so list() is only the
-  // resource prefix. DELETE remove(id) is a 409 { detail, records }.
+  // 練法: one prescribed way of doing an exercise. GET list() takes ?q= (the
+  // drill's name or instructions, or its exercise's names and aliases), and
+  // repeated ?exercise_id=, ?stage_id=, ?topic_id= (both the exercise's) and
+  // ?source_id=, each "any of", and ?no_stage=true; in the roadmap order of
+  // the exercises, then by position. Each summary carries its exercise, that
+  // exercise's stage and topics, its source, the round, record count and
+  // total minutes. An exercise's detail also carries its own drills in full.
+  // DELETE remove(id) is a 409 { detail, records }.
   drills: {
     list: () => `${API}/drills`,
     detail: (id) => `${API}/drills/${id}`,

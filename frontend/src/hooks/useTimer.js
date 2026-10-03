@@ -10,10 +10,11 @@ export const TimerContext = createContext(null)
 
 /**
  * { timer, seconds, isPending, error, start(body), pause(), resume(), stop(),
- * discard(), clear() } - `timer` is the TimerResponse or null, `seconds` its
+ * update(body), holdDraft(draft), discard(), clear() } - `timer` is the TimerResponse or null, `seconds` its
  * live elapsed seconds. Each action resolves with the server's answer and
  * puts it in the cache; a 404 or 409 (another device moved the timer on)
- * refetches before it is rethrown.
+ * refetches before it is rethrown. holdDraft only writes the cache - see
+ * hooks/useDraftAutosave.js.
  */
 export function useTimer() {
   const value = useContext(TimerContext)

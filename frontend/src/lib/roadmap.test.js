@@ -1,21 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { currentStageId, goalStatusLabel, localToday, stageStatusLabel } from './roadmap'
+import { goalStatusLabel, inProgressStages, localToday, stageStatusLabel } from './roadmap'
 
-describe('currentStageId', () => {
-  it('is the first stage not passed, across goals in order', () => {
+describe('inProgressStages', () => {
+  it('is every stage in progress, wherever it is, in roadmap order', () => {
     const goals = [
-      { id: 1, stages: [{ id: 10, status: 'passed' }, { id: 11, status: 'passed' }] },
+      { id: 1, stages: [{ id: 10, status: 'passed' }, { id: 11, status: 'not_started' }, { id: 12, status: 'in_progress' }] },
       { id: 2, stages: [] },
-      { id: 3, stages: [{ id: 30, status: 'not_started' }, { id: 31, status: 'in_progress' }] },
+      { id: 3, stages: [{ id: 30, status: 'in_progress' }, { id: 31, status: 'not_started' }] },
     ]
-    expect(currentStageId(goals)).toBe(30)
+    expect(inProgressStages(goals).map(({ goal, stage }) => [goal.id, stage.id])).toEqual([
+      [1, 12],
+      [3, 30],
+    ])
   })
 
-  it('is null when every stage is passed, or there are none', () => {
-    expect(currentStageId([{ id: 1, stages: [{ id: 10, status: 'passed' }] }])).toBeNull()
-    expect(currentStageId([])).toBeNull()
-    expect(currentStageId(undefined)).toBeNull()
+  it('is empty when nothing is in progress, or there are no goals', () => {
+    expect(inProgressStages([{ id: 1, stages: [{ id: 10, status: 'not_started' }] }])).toEqual([])
+    expect(inProgressStages([])).toEqual([])
+    expect(inProgressStages(undefined)).toEqual([])
   })
 })
 

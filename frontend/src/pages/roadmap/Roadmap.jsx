@@ -4,11 +4,13 @@
 // means (description) and its test piece. Under each, its stages as rows:
 // number, name, status, test. One read, GET /api/goals, carries all of it.
 //
-// The CURRENT STAGE is the first stage, across every goal in order, that is
-// not passed (lib/roadmap.js). It is marked with aria-current="step" and drawn
-// in the brand colour, so the page answers "what do I practise today" at a
-// glance. Goal status is not consulted: status is set by hand, and a level may
-// be passed on its test before every stage is ticked.
+// What is IN PROGRESS is highlighted wherever it sits: every stage set to
+// 進行中 and every level set to 進行中, drawn in the brand colour, and the
+// stages in progress are listed again at the top as links, so the page
+// answers "what am I practising now" at a glance. Nothing is derived from the
+// order: the owner does not go top to bottom or one stage at a time, so
+// several stages in different levels may be in progress together, and a later
+// one may be while an earlier one is not started.
 //
 // A stage's status changes from its row through a small select, a PATCH of
 // { status } alone - with passed_on = today (the browser's date) when it
@@ -28,10 +30,12 @@ import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiQuery } from '../../hooks/useApi'
 import { cx } from '../../lib/cx'
 import {
-  currentStageId,
+  GOAL_ACTIVE,
   goalStatusLabel,
   goalStatusTone,
+  inProgressStages,
   localToday,
+  STAGE_ACTIVE,
   STAGE_DONE,
   STAGE_STATUSES,
 } from '../../lib/roadmap'
@@ -40,7 +44,8 @@ import { rowsReducer } from '../../lib/rowList'
 // A stage change shows on the roadmap and on that stage's own page.
 const INVALIDATE = [endpoints.goals.list(), endpoints.stages.list()]
 
-function StageRow({ stage, current, first, last, busy, onStatus, onMove }) {
+function StageRow({ stage, first, last, busy, onStatus, onMove }) {
+  const active = stage.status === STAGE_ACTIVE
   const [error, setError] = useState(null)
 
   async function run(action) {
@@ -54,10 +59,10 @@ function StageRow({ stage, current, first, last, busy, onStatus, onMove }) {
 
   return (
     <li
-      aria-current={current ? 'step' : undefined}
+      data-in-progress={active || undefined}
       className={cx(
         'space-y-2 border-t border-border px-3 py-2.5 first:border-t-0',
-        current && 'border-l-4 border-l-brand bg-brand-soft',
+        active && 'border-l-4 border-l-brand bg-brand-soft',
       )}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -70,12 +75,11 @@ function StageRow({ stage, current, first, last, busy, onStatus, onMove }) {
               to={`/roadmap/stages/${stage.id}`}
               className={cx(
                 'font-medium hover:text-brand hover:underline',
-                current ? 'text-brand' : stage.status === STAGE_DONE ? 'text-text-muted' : 'text-text',
+                active ? 'text-brand' : stage.status === STAGE_DONE ? 'text-text-muted' : 'text-text',
               )}
             >
               {stage.display_name}
             </Link>
-            {current ? <Chip tone="brand">目前</Chip> : null}
           </div>
           {stage.test ? <p className="text-sm text-text-muted">測驗：{stage.test}</p> : null}
         </div>
@@ -120,11 +124,19 @@ function StageRow({ stage, current, first, last, busy, onStatus, onMove }) {
   )
 }
 
-function GoalBlock({ goal, currentId, busy, onStatus, onMove }) {
+function GoalBlock({ goal, busy, onStatus, onMove }) {
   const headingId = `goal-${goal.id}`
   const stages = goal.stages ?? []
+  const active = goal.status === GOAL_ACTIVE
   return (
-    <section aria-labelledby={headingId} className="overflow-hidden rounded-lg border border-border bg-surface">
+    <section
+      aria-labelledby={headingId}
+      data-in-progress={active || undefined}
+      className={cx(
+        'overflow-hidden rounded-lg border bg-surface',
+        active ? 'border-brand ring-1 ring-brand' : 'border-border',
+      )}
+    >
       <div className="space-y-2 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Chip className="font-mono">{goal.code}</Chip>
@@ -159,7 +171,6 @@ function GoalBlock({ goal, currentId, busy, onStatus, onMove }) {
               <StageRow
                 key={stage.id}
                 stage={stage}
-                current={stage.id === currentId}
                 first={index === 0}
                 last={index === stages.length - 1}
                 busy={busy}
@@ -177,6 +188,36 @@ function GoalBlock({ goal, currentId, busy, onStatus, onMove }) {
           </LinkButton>
         </div>
       </div>
+    </section>
+  )
+}
+
+function InProgress({ goals }) {
+  const entries = inProgressStages(goals)
+  return (
+    <section aria-labelledby="in-progress" className="space-y-2 rounded-lg border border-brand bg-brand-soft p-4">
+      <h2 id="in-progress" className="font-display text-lg font-bold text-brand">
+        進行中
+      </h2>
+      {entries.length ? (
+        <ul className="flex flex-wrap gap-2">
+          {entries.map(({ goal, stage }) => (
+            <li key={stage.id}>
+              <Link
+                to={`/roadmap/stages/${stage.id}`}
+                className="inline-flex items-baseline gap-1.5 rounded-md border border-brand bg-surface px-2.5 py-1 text-sm hover:text-brand"
+              >
+                <span className="font-mono text-xs text-text-faint">
+                  {goal.code} · {stage.number}
+                </span>
+                {stage.display_name}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-text-muted">還沒有進行中的階段：在階段的狀態選「進行中」。</p>
+      )}
     </section>
   )
 }
@@ -220,14 +261,13 @@ export default function Roadmap() {
       <Empty action={<LinkButton to="/roadmap/goals/new">新增等級</LinkButton>}>還沒有任何等級。</Empty>
     )
   else {
-    const currentId = currentStageId(goals.data)
     body = (
       <div className="space-y-5">
+        <InProgress goals={goals.data} />
         {goals.data.map((goal) => (
           <GoalBlock
             key={goal.id}
             goal={goal}
-            currentId={currentId}
             busy={busy}
             onStatus={setStatus}
             onMove={move}
@@ -242,7 +282,7 @@ export default function Roadmap() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold">路線圖</h1>
-          <p className="text-sm text-text-muted">每個等級以測驗作品結束；目前的階段是第一個還沒通過的。</p>
+          <p className="text-sm text-text-muted">每個等級以測驗作品結束。進行中的等級與階段會標出來，可以同時好幾個，不必照順序。</p>
         </div>
         <LinkButton to="/roadmap/goals/new" kind="primary">
           新增等級

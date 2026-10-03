@@ -94,8 +94,12 @@ def start(db: Session, payload) -> None:
 
 
 def update(db: Session, payload) -> None:
+    """In any state, stopped included. A draft sent replaces the one held,
+    whole; it is stored unchecked (see `RecordDraft`)."""
     timer = _locked(db)
     sent = {field: getattr(payload, field) for field in payload.model_fields_set}
+    if sent.get("draft") is not None:
+        sent["draft"] = sent["draft"].stored()
     _check(db, timer, sent, TimerMode(timer.mode))
     for field, value in sent.items():
         setattr(timer, field, value)
@@ -130,7 +134,11 @@ def stop(db: Session) -> None:
 def save_as_record(db: Session, payload) -> Record:
     """Create the record and delete the timer, in one transaction. Only a
     stopped timer; the record is checked exactly as `POST /api/records`
-    checks it, and a refusal there leaves the timer untouched."""
+    checks it, and a refusal there leaves the timer untouched.
+
+    The body is the record. The timer's draft is not merged into it - the
+    form that sends the body opened with the draft already in it - and goes
+    with the timer."""
     timer = _locked(db)
     if timer.state != TimerState.STOPPED:
         raise AppError(409, f"The timer is {timer.state}. Stop it before saving it as a record.")
@@ -141,6 +149,6 @@ def save_as_record(db: Session, payload) -> Record:
 
 
 def discard(db: Session) -> None:
-    """捨棄: the session is thrown away, in any state."""
+    """捨棄: the session is thrown away, in any state, its draft with it."""
     db.delete(_locked(db))
     db.commit()

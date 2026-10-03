@@ -1,8 +1,9 @@
 // Frontend: the timer, /timer.
 //
-// With no timer, the start form: countdown or stopwatch; for a countdown the
-// 10 and 30 minute presets and a number of minutes, defaulting by the day of
-// the week (lib/timer.js); and optionally an exercise, then one of its drills.
+// With no timer, the start form: stopwatch (the default) or countdown; for a
+// countdown the 10 and 30 minute presets and a number of minutes, defaulting
+// by the day of the week (lib/timer.js); and optionally an exercise, then one
+// of its drills.
 // `?drill=` preselects a drill and its exercise, `?exercise=` an exercise -
 // as the record form's.
 //
@@ -12,6 +13,15 @@
 // after a confirm. A stopped timer that was not recorded yet waits here, with
 // 記錄 back to that form.
 //
+// Below the clock, 紀錄草稿: the record the timer will become, editable in
+// every state - the record form's own fields (components/forms/RecordFields),
+// minus the date and minutes, which are the timer's. Edits save themselves to
+// the timer a moment after typing stops (hooks/useDraftAutosave), with a line
+// saying so; the form adopts the server's draft once per timer, so the 30 s
+// refetch never writes over what is being typed. Pause, resume, 停止 and 記錄
+// send a waiting edit first, so the record form opens with it; 捨棄 drops it
+// with the timer.
+//
 // The timer's state is TimerProvider's (components/timer/), shared with the
 // chip in the top bar; this page only draws it and calls its actions.
 import { useState } from 'react'
@@ -19,10 +29,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { endpoints } from '../../api/endpoints'
 import ActivitySelect from '../../components/forms/ActivitySelect'
+import RecordFields from '../../components/forms/RecordFields'
 import Dialog from '../../components/ui/Dialog'
 import { Button, Card, Field, Input, LinkButton } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
 import { useApiQuery } from '../../hooks/useApi'
+import { useDraftAutosave } from '../../hooks/useDraftAutosave'
+import { useRecordDefaults } from '../../hooks/useRecordDefaults'
 import { useTimer } from '../../hooks/useTimer'
 import { cx } from '../../lib/cx'
 import {
@@ -35,10 +48,12 @@ import {
   isRunning,
   isStopped,
   startPayload,
+  STOPWATCH,
   timerClock,
   timerDrill,
   timerExercise,
   TIMER_MODES,
+  timerRecordForm,
   validMinutes,
 } from '../../lib/timer'
 
@@ -56,7 +71,7 @@ function StartForm() {
   const { start } = useTimer()
   const [searchParams] = useSearchParams()
   const drillParam = searchParams.get('drill')
-  const [mode, setMode] = useState(COUNTDOWN)
+  const [mode, setMode] = useState(STOPWATCH)
   const [minutes, setMinutes] = useState(() => String(defaultCountdownMinutes()))
   const [activity, setActivity] = useState(() => ({
     exerciseId: drillParam ? '' : (searchParams.get('exercise') ?? ''),
@@ -171,7 +186,7 @@ function Activity({ timer }) {
   )
 }
 
-function DiscardDialog({ onClose }) {
+function DiscardDialog({ onClose, beforeDiscard }) {
   const { discard } = useTimer()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -180,6 +195,7 @@ function DiscardDialog({ onClose }) {
     setBusy(true)
     setError(null)
     try {
+      await beforeDiscard?.()
       await discard()
     } catch (caught) {
       setError(caught)
@@ -211,7 +227,7 @@ function DiscardDialog({ onClose }) {
   )
 }
 
-function RunningTimer({ timer, seconds }) {
+function RunningTimer({ timer, seconds, draftSaver }) {
   const { pause, resume, stop } = useTimer()
   const navigate = useNavigate()
   const [error, setError] = useState(null)
@@ -224,7 +240,10 @@ function RunningTimer({ timer, seconds }) {
     setError(null)
     setBusy(true)
     try {
-      await action()
+      // A waiting draft edit lands first: its answer cannot then arrive after
+      // this one and put the timer back the way it was.
+      await draftSaver.flush()
+      await action?.()
       after?.()
     } catch (caught) {
       setError(caught)
@@ -261,7 +280,14 @@ function RunningTimer({ timer, seconds }) {
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         {stopped ? (
-          <LinkButton to={RECORD_FORM} kind="primary">
+          <LinkButton
+            to={RECORD_FORM}
+            kind="primary"
+            onClick={(event) => {
+              event.preventDefault()
+              run(null, () => navigate(RECORD_FORM))
+            }}
+          >
             記錄
           </LinkButton>
         ) : (
@@ -285,8 +311,54 @@ function RunningTimer({ timer, seconds }) {
         </Button>
       </div>
       {error ? <ErrorNote error={error} /> : null}
-      {discarding ? <DiscardDialog onClose={() => setDiscarding(false)} /> : null}
+      {discarding ? (
+        <DiscardDialog onClose={() => setDiscarding(false)} beforeDiscard={draftSaver.cancel} />
+      ) : null}
     </Card>
+  )
+}
+
+const SAVE_STATUS = { saving: '儲存中…', saved: '已儲存' }
+
+function DraftStatus({ status }) {
+  if (status.phase === 'error') {
+    return <ErrorNote error={status.error}>草稿沒有儲存：{status.error?.message ?? '請再試一次。'}</ErrorNote>
+  }
+  return (
+    <p role="status" className="text-sm text-text-faint">
+      {SAVE_STATUS[status.phase] ?? '輸入後會自動儲存。'}
+    </p>
+  )
+}
+
+/** A timer, and the record draft it carries. */
+function TimerSession({ timer, seconds }) {
+  const recordDefaults = useRecordDefaults()
+  const [form, setForm] = useState(() => timerRecordForm(timer))
+  const [adopted, setAdopted] = useState(timer.id)
+
+  // The server's draft, once per timer, during render: a refetch of the same
+  // timer does not write over what is being typed.
+  if (adopted !== timer.id) {
+    setAdopted(timer.id)
+    setForm(timerRecordForm(timer))
+  }
+
+  const draftSaver = useDraftAutosave(timer.id, form)
+
+  return (
+    <>
+      <RunningTimer timer={timer} seconds={seconds} draftSaver={draftSaver} />
+      <section aria-labelledby="timer-draft" className="space-y-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="timer-draft" className="font-display text-xl font-bold">
+            紀錄草稿
+          </h2>
+          <DraftStatus status={draftSaver.status} />
+        </div>
+        <RecordFields form={form} setForm={setForm} defaults={recordDefaults.defaults} />
+      </section>
+    </>
   )
 }
 
@@ -295,7 +367,7 @@ export default function Timer() {
   let body
   if (isPending) body = <Loading />
   else if (error && !timer) body = <ErrorNote error={error} />
-  else if (timer) body = <RunningTimer timer={timer} seconds={seconds} />
+  else if (timer) body = <TimerSession timer={timer} seconds={seconds} />
   else body = <StartForm />
 
   return (

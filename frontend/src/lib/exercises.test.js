@@ -16,7 +16,7 @@ describe('groupByStage', () => {
     ]
     const groups = groupByStage(exercises)
     expect(groups.map((group) => group.title)).toEqual(['階段 1 · 線條與形狀', '階段 2 · 空間中的形體', NO_STAGE_TITLE])
-    expect(groups.map((group) => group.exercises.map((exercise) => exercise.id))).toEqual([[3], [2, 4], [1, 5]])
+    expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([[3], [2, 4], [1, 5]])
   })
 
   it('draws no 不分階段 group when every exercise has a stage', () => {

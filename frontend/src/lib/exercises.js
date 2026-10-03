@@ -1,8 +1,8 @@
-// Frontend: the exercise library's grouping, and the words for a drill's
-// numbers.
+// Frontend: the exercise and drill libraries' grouping, and the words for a
+// drill's numbers.
 //
-// Every read of an exercise summary's `stage` and of a drill's amount fields
-// is here, so a field the API renames is a one-line fix.
+// Every read of a summary's `stage` and of a drill's amount fields is here, so
+// a field the API renames is a one-line fix.
 
 export const NO_STAGE_TITLE = '不分階段'
 
@@ -12,20 +12,21 @@ export function stageTitle(stage) {
 }
 
 /**
- * Exercise summaries grouped by stage, in roadmap order - a stage's `number`
- * counts from 0 across the whole roadmap, so it is the order - and then the
- * exercises with no stage, under 不分階段. Inside a group the server's order is
- * kept. Returns [{ key, stage, title, exercises }].
+ * Summaries grouped by `stage`, in roadmap order - a stage's `number` counts
+ * from 0 across the whole roadmap, so it is the order - and then the ones with
+ * no stage, under 不分階段. Exercise summaries carry their own stage; drill
+ * summaries carry their exercise's. Inside a group the server's order is kept.
+ * Returns [{ key, stage, title, items }].
  */
-export function groupByStage(exercises) {
+export function groupByStage(summaries) {
   const groups = new Map()
-  for (const exercise of exercises ?? []) {
-    const stage = exercise.stage ?? null
+  for (const summary of summaries ?? []) {
+    const stage = summary.stage ?? null
     const key = stage ? `stage-${stage.id}` : 'none'
     if (!groups.has(key)) {
-      groups.set(key, { key, stage, title: stage ? stageTitle(stage) : NO_STAGE_TITLE, exercises: [] })
+      groups.set(key, { key, stage, title: stage ? stageTitle(stage) : NO_STAGE_TITLE, items: [] })
     }
-    groups.get(key).exercises.push(exercise)
+    groups.get(key).items.push(summary)
   }
   return [...groups.values()].sort((a, b) => {
     if (!a.stage) return b.stage ? 1 : 0

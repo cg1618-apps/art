@@ -4,14 +4,23 @@ Every refusal comes before anything is written, so a refused save changes
 nothing.
 """
 
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.constants import SOURCE
 from app.errors import AppError
-from app.models import Drill, DrillResource, DrillSourceLink, Exercise, Record
+from app.models import (
+    Drill,
+    DrillResource,
+    DrillSourceLink,
+    Exercise,
+    ExerciseAlias,
+    ExerciseTopic,
+    Record,
+)
 from app.schemas.exercise import DRILL_LIST_FIELDS
 from app.services import options, records, resources
+from app.services.search import ESCAPE, contains, names_match, tagged_with
 
 #: The list fields, and the row each item becomes.
 LINK_MODELS = {"source_links": DrillSourceLink, "resources": DrillResource}
@@ -32,6 +41,79 @@ def get(db: Session, drill_id: int) -> Drill:
     if row is None:
         raise AppError(404, "No such drill.")
     return row
+
+
+def matches(q: str):
+    """The drill's own name or its instructions, or any name or alias of its
+    exercise."""
+    term = contains(q)
+    exercise_match = (
+        select(Exercise.id)
+        .where(names_match(q, Exercise, ExerciseAlias.exercise_id, ExerciseAlias.value))
+        .scalar_subquery()
+    )
+    return or_(
+        Drill.name.ilike(term, escape=ESCAPE),
+        Drill.instructions.ilike(term, escape=ESCAPE),
+        Drill.exercise_id.in_(exercise_match),
+    )
+
+
+def search(
+    db: Session,
+    numbers: dict[int, int],
+    q: str | None = None,
+    exercise_id: list[int] | None = None,
+    stage_id: list[int] | None = None,
+    topic_id: list[int] | None = None,
+    source_id: list[int] | None = None,
+    no_stage: bool = False,
+) -> list[Drill]:
+    """In roadmap order of their exercise - as `exercises.search` orders
+    exercises - then by position inside it. `numbers` is `stages.numbers`.
+    Stage and topic are the exercise's: a drill has neither of its own. A
+    repeated filter means "any of" its values; different filters narrow each
+    other."""
+    query = (
+        db.query(Drill)
+        .join(Drill.exercise)
+        .options(
+            selectinload(Drill.exercise).options(
+                selectinload(Exercise.stage), selectinload(Exercise.topics)
+            ),
+            selectinload(Drill.source),
+        )
+    )
+    if q and q.strip():
+        query = query.filter(matches(q))
+    if exercise_id:
+        query = query.filter(Drill.exercise_id.in_(exercise_id))
+    if stage_id:
+        query = query.filter(Exercise.stage_id.in_(stage_id))
+    if no_stage:
+        query = query.filter(Exercise.stage_id.is_(None))
+    if topic_id:
+        query = query.filter(
+            tagged_with(Exercise, ExerciseTopic.exercise_id, ExerciseTopic.option_id, topic_id)
+        )
+    if source_id:
+        query = query.filter(Drill.source_id.in_(source_id))
+    rows = query.all()
+    unstaged = len(numbers)
+
+    def roadmap_order(drill: Drill):
+        exercise = drill.exercise
+        stage = exercise.stage_id
+        return (
+            numbers.get(stage, unstaged) if stage is not None else unstaged,
+            exercise.display_name.casefold(),
+            exercise.id,
+            drill.position,
+            drill.id,
+        )
+
+    rows.sort(key=roadmap_order)
+    return rows
 
 
 def _check_exercise(db: Session, exercise_id: int) -> None:

@@ -63,7 +63,7 @@ function GroupedList({ exercises }) {
       {groupByStage(exercises).map((group) => (
         <Section key={group.key} title={group.title}>
           <ul className="grid gap-3 sm:grid-cols-2" aria-label={group.title}>
-            {group.exercises.map((exercise) => (
+            {group.items.map((exercise) => (
               <li key={exercise.id}>
                 <ExerciseCard exercise={exercise} />
               </li>

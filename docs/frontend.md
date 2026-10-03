@@ -18,7 +18,9 @@ Tailwind 4 with `food`'s design tokens, Vitest. Why `food`'s and not
 | `src/components/ResourceList.jsx` | resources on a detail page |
 | `src/components/RecordList.jsx` | records as rows, used by the records, exercise and stage pages |
 | `src/components/forms/ActivitySelect.jsx` | an exercise, then optionally one of its drills; the record form and the timer use it |
-| `src/lib/timer.js`, `src/hooks/useTimer.js`, `src/components/timer/` | the timer's arithmetic and formatting, its context, and the top bar chip |
+| `src/lib/timer.js`, `src/hooks/useTimer.js`, `src/components/timer/` | the timer's arithmetic and formatting, its context, the top bar chip, and `StartTimerButton` (a drill's 開始計時) |
+| `src/components/forms/RecordFields.jsx` | a record's fields but the date and minutes; the record form and the timer's draft both draw them, so the two cannot drift |
+| `src/hooks/useRecordDefaults.js`, `src/hooks/useDraftAutosave.js` | the location and tool defaults; saving the timer's draft as it is typed |
 | `src/components/forms/RoadmapSelect.jsx` | picks a stage, or a stage or a level for a test |
 | `src/lib/records.js`, `src/lib/exercises.js` | every API field those pages read or send, in one place each |
 | `src/components/ui/` | `Dialog`, form and display primitives, loading / error / empty states |
@@ -33,7 +35,7 @@ whole hostname, so every page is the owner's.
 | Route | Page |
 | --- | --- |
 | `/` | redirects to `/roadmap` |
-| `/roadmap` | every level in order — code, name, status, description, test — with its stages as rows: number, name, status, test. The **current stage**, the first not passed in roadmap order, is marked. Each row changes its status in place (passing it records today) and moves with ↑/↓ |
+| `/roadmap` | every level in order — code, name, status, description, test — with its stages as rows: number, name, status, test. Everything **in progress** is highlighted wherever it sits — every stage and every level set to 進行中, any number at once — and the stages in progress are listed again at the top as links. Nothing is derived from the order: the owner does not work top to bottom or one stage at a time. Each row changes its status in place (passing it records today) and moves with ↑/↓ |
 | `/roadmap/goals/new`, `/roadmap/goals/:id/edit` | goal form; the date appears only for 已達成. Saving or deleting returns to the roadmap |
 | `/roadmap/stages/:id` | a stage: description, test, resources, remark, status, its level, its exercises and its test records |
 | `/roadmap/stages/new?goal=:id`, `/roadmap/stages/:id/edit` | stage form; changing the level puts the stage last in it |
@@ -43,10 +45,12 @@ whole hostname, so every page is the owner's.
 | `/exercises` | grouped by stage in roadmap order, then 不分階段; search and a topic filter in the URL |
 | `/exercises/:id` | description, resources, topics, remark; drills as cards (source, unit × target, minutes, frequency, Markdown instructions, links), each with 記錄 → `/records/new?drill=`; the exercise's records and total minutes |
 | `/exercises/new`, `/exercises/:id/edit` | exercise form |
-| `/drills/new?exercise=`, `/drills/:id/edit` | drill form: source, source links and resources as two row lists |
+| `/drills` | every drill, grouped by its exercise's stage in roadmap order, then 不分階段; search and the 主題 and 來源 filters in the URL. Cards: name, exercise, source, unit × target, minutes, frequency, records and minutes |
+| `/drills/:id` | the drill: its exercise and stage, source, instructions, source links, resources, remark, its records; 記錄, 開始計時, 編輯 |
+| `/drills/new?exercise=`, `/drills/:id/edit` | drill form: source, source links and resources as two row lists. Saving goes to the drill's page; deleting to its exercise's |
 | `/records` | grouped by date, newest first, each day's total (of the records shown, so it follows the filters) and this week's total, Monday to Sunday, from the summary; kind and exercise filters in the URL |
 | `/records/new`, `/records/:id/edit` | date (today), location (the most recent record's), tool (Clip Studio Paint), an exercise then optionally one of its drills (`?drill=` or `?exercise=` preselects), kind, a stage or level when 測驗, method with descriptions, minutes, references, notes. The defaults fill only untouched fields |
-| `/timer` | with no timer, a start form: stopwatch or countdown, 10 / 30 minutes or a custom length (the default by weekday: 10 Monday to Friday, 30 at the weekend — a constant in `lib/timer.js` until Schedule owns it), and an optional exercise then drill. With one: large digits, the activity, pause / resume, 停止, 捨棄. A countdown past zero keeps counting as `+m:ss` and plays one short tone |
+| `/timer` | with no timer, a start form: stopwatch (the default) or countdown, 10 / 30 minutes or a custom length (the default by weekday: 10 Monday to Friday, 30 at the weekend — a constant in `lib/timer.js` until Schedule owns it), and an optional exercise then drill. With one: large digits, the activity, pause / resume, 停止, 捨棄, and the 紀錄草稿 below it. A countdown past zero keeps counting as `+m:ss` and plays one short tone |
 | `/options` | one section per category: its label and description, then its values with description, remark, order and how many places use each (notes, exercises, drills, records). Add and edit in place; delete opens a dialog stating the count and sends it with the request. If the count changed, the dialog shows the new one and asks again |
 
 **Every option picker shows the value's description** and links to
@@ -71,13 +75,26 @@ clock by the server's `now`. While a timer exists:
 - the top bar shows a chip with the activity and the time — on a phone too —
   and 待記錄 once it is stopped;
 - the tab title carries the time;
-- 開始計時 on a drill card starts a countdown of the day's default with that
-  drill, or opens `/timer` if a timer already exists.
+- 開始計時 on a drill starts a stopwatch with that drill, or opens `/timer` if
+  a timer already exists.
+
+**The record is written while the timer runs.** Under the clock, 紀錄草稿 holds
+the record's fields (`RecordFields`): the activity, kind and test target,
+method, location, tool, references and notes, editable in every state. Edits
+save themselves 800 ms after the typing stops (`useDraftAutosave`), as the
+timer's activity and `draft`, with 儲存中… / 已儲存 beside them. The page adopts
+the server's draft once per timer, so the 30-second refetch never overwrites
+what is being typed; saves go one at a time; and pause, resume, 停止 and 記錄
+send a waiting edit first. 捨棄 drops it.
 
 停止 opens `/records/new?from=timer`: the ordinary record form, prefilled with
-the minutes (rounded, at least 1), the activity and the date the timer
-started, saving through `/api/timer/record`. Over three hours it warns beside
-the duration. Leaving the form keeps the timer stopped, so nothing is lost.
+the minutes (rounded, at least 1), the date the timer started, and the
+activity and draft, saving through `/api/timer/record`. Its edits save to the
+draft too, so leaving and coming back loses nothing. Over three hours it warns
+beside the duration. Leaving the form keeps the timer stopped.
+
+An edit made under 800 ms before the tab is closed is lost: there is no
+`beforeunload` save.
 
 ## How the built bundle is served
 

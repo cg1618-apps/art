@@ -11,6 +11,14 @@ and `ck_active_timer_state` keeps both from being set at once.
 
 The activity is SET NULL with its drill or exercise, not RESTRICT: a running
 timer is not history, and deleting the drill should not be blocked by it.
+
+`draft` is the rest of the record the timer will become, filled in while it
+runs: the record write's fields other than the date, the minutes and the
+activity (those three are the timer's own). JSONB, not columns: it is
+half-typed by design - a test with no target yet, a reference with no link -
+and nothing checks it against the record's rules until it is saved through
+`POST /api/timer/record`. A key present was chosen by the owner; a key absent
+was not touched, so the record form's defaults still apply to it.
 """
 
 import datetime
@@ -25,6 +33,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import TimerMode, TimerState
@@ -63,6 +72,8 @@ class ActiveTimer(Base, TimestampMixin):
     exercise_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("exercise.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # The record draft (`RecordDraft`'s fields that were sent), or NULL.
+    draft: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     drill = relationship(Drill)
     exercise = relationship(Exercise)

@@ -11,6 +11,7 @@ import {
   roundToMinutes,
   startPayload,
   timerClock,
+  draftPayload,
   timerRecordForm,
   timerTitle,
   validMinutes,
@@ -141,6 +142,67 @@ describe('the record a stopped timer becomes', () => {
       tool_id: 'unchosen',
       kind: 'practice',
     })
+  })
+
+  it('merges the draft: the keys it carries, and the defaults for those it leaves out', () => {
+    const form = timerRecordForm(
+      timer({
+        state: 'stopped',
+        elapsed_seconds: 600,
+        activity: { exercise: { id: 1, display_name: '線條' }, drill: null },
+        draft: {
+          kind: 'test',
+          stage_id: 3,
+          goal_id: null,
+          method_id: 12,
+          location_id: null,
+          references: [{ name: '', url: '' }],
+          notes: '測一下',
+        },
+      }),
+    )
+    expect(form).toMatchObject({
+      duration_minutes: '10',
+      exercise_id: '1',
+      drill_id: '',
+      kind: 'test',
+      target: 'stage:3',
+      method_id: 12,
+      // Chosen as none: stays none.
+      location_id: null,
+      // Never chosen: still takes the default.
+      tool_id: 'unchosen',
+      notes: '測一下',
+    })
+    expect(form.references).toHaveLength(1)
+    expect(form.references[0]).toMatchObject({ name: '', url: '' })
+  })
+
+  it('a draft round-trips through the form', () => {
+    const draft = {
+      kind: 'piece',
+      stage_id: null,
+      goal_id: 4,
+      method_id: null,
+      tool_id: 41,
+      references: [{ name: '人體', url: 'htt' }],
+      notes: '',
+    }
+    const form = timerRecordForm(
+      timer({
+        activity: { exercise: { id: 1, display_name: '線條' }, drill: { id: 5, display_name: '基本線條' } },
+        draft,
+      }),
+    )
+    expect(draftPayload(form)).toEqual({ drill_id: 5, exercise_id: null, draft })
+  })
+
+  it('sends the exercise when there is no drill, and leaves out a location or tool not chosen', () => {
+    const form = timerRecordForm(timer({ activity: { exercise: { id: 1, display_name: '線條' }, drill: null } }))
+    const body = draftPayload(form)
+    expect(body).toMatchObject({ drill_id: null, exercise_id: 1 })
+    expect(body.draft).not.toHaveProperty('location_id')
+    expect(body.draft).not.toHaveProperty('tool_id')
   })
 
   it('asks for a check past three hours', () => {
