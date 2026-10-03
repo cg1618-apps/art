@@ -217,3 +217,112 @@ def test_notes_and_options_downgrade_and_upgrade_again(scratch_database):
     assert tables == set(), tables
 
     _upgrade(scratch_database)
+
+
+ROADMAP_ORDER = """
+    SELECT goal.code, goal.status, stage.name_en, stage.status, stage.position
+      FROM stage JOIN goal ON goal.id = stage.goal_id
+     ORDER BY goal.position, goal.id, stage.position, stage.id
+"""
+
+
+def test_the_roadmap_is_seeded_in_order(scratch_database):
+    """Six levels, sixteen stages numbered 0-15 in the spec's order, L0
+    active and every stage not started. The full text is in the migration;
+    two strings are compared verbatim here as a check on the copying."""
+    _upgrade(scratch_database)
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        goals = conn.execute(
+            text("SELECT code, name_cn, name_en, status, position FROM goal ORDER BY position")
+        ).all()
+        stages = conn.execute(text(ROADMAP_ORDER)).all()
+        l0_description = conn.execute(
+            text("SELECT description FROM goal WHERE code = 'L0'")
+        ).scalar()
+        effects_test = conn.execute(text("SELECT test FROM stage WHERE name_en = 'Effects'")).scalar()
+    engine.dispose()
+
+    assert [(c, cn, en, s) for c, cn, en, s, _ in goals] == [
+        ("L0", "基礎", "Foundations", "active"),
+        ("L1", "人體", "Figure", "planned"),
+        ("L2", "角色", "Character", "planned"),
+        ("L3", "場景", "Scene", "planned"),
+        ("L4", "上色", "Colour", "planned"),
+        ("L5", "插畫", "Illustration", "planned"),
+    ]
+    assert [p for *_, p in goals] == list(range(6))
+
+    assert len(stages) == 16
+    # The derived number is the place in this order: 0 to 15.
+    assert [(code, name) for code, _, name, _, _ in stages] == [
+        ("L0", "Clip Studio Paint setup"),
+        ("L0", "Lines and shapes"),
+        ("L0", "Form in space"),
+        ("L1", "Proportion"),
+        ("L1", "Gesture to mannequin"),
+        ("L1", "Figure in perspective"),
+        ("L2", "Major muscle masses"),
+        ("L2", "Head, face, expression"),
+        ("L2", "Hands and feet"),
+        ("L2", "Finishing"),
+        ("L3", "Environment perspective"),
+        ("L3", "Composition and character in scene"),
+        ("L4", "Value and light"),
+        ("L4", "Colour"),
+        ("L5", "Full pieces and creatures"),
+        ("L5", "Effects"),
+    ]
+    assert {status for _, _, _, status, _ in stages} == {"not_started"}
+    positions: dict[str, list[int]] = {}
+    for code, _, _, _, position in stages:
+        positions.setdefault(code, []).append(position)
+    assert all(p == list(range(len(p))) for p in positions.values()), positions
+
+    assert l0_description == "能穩定地畫出線條與基本形狀，並把方塊、圓柱、球體放進透視空間。"
+    assert effects_test == "一張有火球的角色插畫。"
+
+
+def test_the_roadmap_seed_is_idempotent(scratch_database):
+    """Running the seed again over a seeded database adds nothing."""
+    import importlib.util
+
+    _upgrade(scratch_database)
+    spec = importlib.util.spec_from_file_location(
+        "goals_and_roadmap", ROOT / "alembic" / "versions" / "0003_goals_and_roadmap.py"
+    )
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    engine = create_engine(scratch_database)
+    with engine.begin() as conn:
+        migration.seed(conn)
+    with engine.connect() as conn:
+        counts = conn.execute(
+            text("SELECT (SELECT count(*) FROM goal), (SELECT count(*) FROM stage)")
+        ).one()
+    engine.dispose()
+    assert tuple(counts) == (6, 16)
+
+
+def test_goals_and_roadmap_downgrade_and_upgrade_again(scratch_database):
+    """Down to 0002 drops the roadmap's tables and nothing else; up again
+    re-seeds it."""
+    _upgrade(scratch_database)
+    _downgrade(scratch_database, "0002_notes_and_options")
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        tables = set(inspect(conn).get_table_names()) - {"alembic_version"}
+    engine.dispose()
+    assert tables == {"system_option", "note", "note_alias", "note_resource", "note_topic"}, tables
+
+    _upgrade(scratch_database)
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        counts = conn.execute(
+            text("SELECT (SELECT count(*) FROM goal), (SELECT count(*) FROM stage)")
+        ).one()
+    engine.dispose()
+    assert tuple(counts) == (6, 16)
