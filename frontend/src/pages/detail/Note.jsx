@@ -14,6 +14,7 @@ import { fetchJson } from '../../api/client'
 import { endpoints } from '../../api/endpoints'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import Markdown from '../../components/Markdown'
+import ResourceList from '../../components/ResourceList'
 import { Button, Chip, LinkButton, Section } from '../../components/ui/primitives'
 import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiQuery } from '../../hooks/useApi'
@@ -31,18 +32,6 @@ function OptionLink({ option, param }) {
       <Chip className="hover:border-brand hover:text-brand">{option.value}</Chip>
     </Link>
   )
-}
-
-const isWebLink = (url) => /^https?:\/\//i.test(url ?? '')
-
-// A resource's words: its name, else the link's host, else the link.
-function resourceLabel(resource) {
-  if (resource.name) return resource.name
-  try {
-    return new URL(resource.url).host || resource.url
-  } catch {
-    return resource.url
-  }
 }
 
 export default function Note() {
@@ -104,33 +93,7 @@ export default function Note() {
 
       {note.body ? <Markdown>{note.body}</Markdown> : null}
 
-      {note.resources?.length ? (
-        <Section title="資源">
-          <ul className="space-y-1">
-            {note.resources.map((resource) => (
-              <li key={resource.id ?? resource.url}>
-                {isWebLink(resource.url) ? (
-                  <a
-                    href={resource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-brand hover:underline"
-                  >
-                    {resourceLabel(resource)} ↗
-                  </a>
-                ) : (
-                  // Not an http(s) link - a javascript: URL among them - so it
-                  // is shown as text, as the Markdown renderer would leave it.
-                  <span className="text-text-muted">
-                    {resource.name ? `${resource.name}: ` : ''}
-                    {resource.url}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
+      <ResourceList resources={note.resources} />
 
       {note.remark ? (
         <Section title="備註">

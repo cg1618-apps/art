@@ -29,6 +29,27 @@ export const endpoints = {
     update: (id) => `${API}/notes/${id}`,
     remove: (id) => `${API}/notes/${id}`,
   },
+  // 路線圖. GET list() is every goal in roadmap order, each with its stages
+  // (numbered from 0 across the whole roadmap). DELETE remove(id) is a 409
+  // { detail, stages } while the goal still has stages.
+  goals: {
+    list: () => `${API}/goals`,
+    detail: (id) => `${API}/goals/${id}`,
+    create: () => `${API}/goals`,
+    update: (id) => `${API}/goals/${id}`,
+    remove: (id) => `${API}/goals/${id}`,
+  },
+  // A stage of a goal. There is no stage list to read - the roadmap is
+  // goals.list() - so list() is only the resource prefix invalidation matches.
+  // PATCH update(id) may change goal_id, which moves the stage to the end of
+  // its new goal unless a position is sent.
+  stages: {
+    list: () => `${API}/stages`,
+    detail: (id) => `${API}/stages/${id}`,
+    create: () => `${API}/stages`,
+    update: (id) => `${API}/stages/${id}`,
+    remove: (id) => `${API}/stages/${id}`,
+  },
   health: () => '/health',
 }
 

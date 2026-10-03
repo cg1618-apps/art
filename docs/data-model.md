@@ -10,6 +10,9 @@ the chain builds from zero and matches the models.
 
 ## Tables
 
+- [`goal`](#goal) — a level of the roadmap, L0 to L5
+- [`stage`](#stage) — one stage of a level, with its test
+- [`stage_resource`](#stage_resource) — the links kept with a stage
 - [`system_option`](#system_option) — one value of an open vocabulary
 - [`note`](#note) — a piece of knowledge: a term, a tip, advice, a note
 - [`note_alias`](#note_alias) — names a note can be searched by
@@ -23,6 +26,8 @@ flowchart TD
     N -->|note_id, CASCADE| R["note_resource"]
     N -->|note_id, CASCADE| T["note_topic"]
     O -->|option_id, CASCADE| T
+    G["goal"] -->|goal_id, RESTRICT| S["stage"]
+    S -->|stage_id, CASCADE| SR["stage_resource"]
 ```
 
 **What a note owns cascades with it; what it names gives way.** Aliases,
@@ -33,6 +38,61 @@ keeping without them.
 Every table carries `created_at` and `updated_at` except the link and child
 tables; both are `timestamptz` defaulted by the database clock
 (`TimestampMixin`, `app/models/base.py`).
+
+## `goal`
+
+A level: what you can draw at the end of it, and the test that shows it.
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | integer | no | | |
+| `code` | text | no | | `L0` … `L5`; unique as written (`uq_goal_code`), trimmed |
+| `name_cn`, `name_en`, `name_alt` | text | yes | | At least one (`ck_goal_has_a_name`) |
+| `position` | integer | no | | Order on the roadmap. Created without one, it goes last |
+| `description` | text | yes | | Done when you can … |
+| `test` | text | yes | | The test piece |
+| `status` | text | no | `planned` | `planned`, `active`, `achieved` (`ck_goal_status`) |
+| `achieved_on` | date | yes | | Only with `achieved` (`ck_goal_achieved_on_iff_achieved`); achieved may leave it empty |
+| `remark` | text | yes | | |
+
+**Status is set by hand.** Nothing derives it from the stages: a level is
+passed on its test, which may come before every stage is ticked.
+
+**A goal with stages cannot be deleted** (`stage.goal_id` is `RESTRICT`); the
+API says how many stages are in the way.
+
+## `stage`
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | integer | no | | |
+| `goal_id` | integer | no | | → `goal`, `RESTRICT`, indexed |
+| `position` | integer | no | | Order inside its goal; last when not given |
+| `name_cn`, `name_en`, `name_alt` | text | yes | | At least one (`ck_stage_has_a_name`) |
+| `description` | text | yes | | What is practised |
+| `test` | text | yes | | The stage's test |
+| `status` | text | no | `not_started` | `not_started`, `in_progress`, `passed` (`ck_stage_status`) |
+| `passed_on` | date | yes | | Only with `passed`, as `achieved_on` |
+| `remark` | text | yes | | |
+
+**The stage number is derived, never stored**: every stage ordered by goal
+position, goal id, stage position, stage id, numbered from 0. Moving a stage
+renumbers everything after it.
+
+## `stage_resource`
+
+The `note_resource` shape: `id`, `stage_id` (`CASCADE`), `position`, `name`,
+`url` (`ck_stage_resource_has_a_url`). The lectures worth rewatching when the
+stage starts.
+
+## The roadmap seed
+
+Migration `0003_goals_and_roadmap` writes the roadmap agreed with the owner:
+six goals (L0 基礎, L1 人體, L2 角色, L3 場景, L4 上色, L5 插畫) and sixteen
+stages numbered 0 to 15, with their descriptions and tests; L0 `active`,
+everything else not started. It is the seed, not the truth — the roadmap pages
+edit it — and it is idempotent, keyed on the goal code and on goal plus
+`name_cn` for a stage.
 
 ## `system_option`
 

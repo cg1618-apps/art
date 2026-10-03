@@ -6,7 +6,7 @@ the tier: **does code branch on the exact value?**
 
 | Tier | Lives in | Changed by | Here |
 | --- | --- | --- | --- |
-| 1 | Python constants in `app/constants.py` | a code change | `Visibility`, and the option **categories** |
+| 1 | Python constants in `app/constants.py` | a code change | `Visibility`, the goal and stage statuses, and the option **categories** |
 | 2 | `system_option` rows | the Options page (`/options`) | every value below |
 | 3 | entity tables | their own module | none yet |
 
@@ -15,6 +15,8 @@ the tier: **does code branch on the exact value?**
 | Name | Values | Used by |
 | --- | --- | --- |
 | `Visibility` | `private`, `unlisted`, `public` | `note.visibility` (reserved; nothing reads it yet) |
+| `GoalStatus` | `planned`, `active`, `achieved` (計畫中, 進行中, 已達成) | `goal.status` |
+| `StageStatus` | `not_started`, `in_progress`, `passed` (未開始, 進行中, 已通過) | `stage.status` |
 | `OPTION_CATEGORIES` | `note_category`, `topic`, `method` | `system_option.category`, and the Options page's section order |
 
 **Categories are registered, not typed.** Each has a key, a label and a

@@ -292,3 +292,32 @@ Tailwind 4 with `food`'s tokens, Vitest. `media`'s Options page uses raw
 Markdown is `media`'s `ResourceMarkdown` configuration, because `food` has no
 renderer: `react-markdown` and `remark-gfm`, no raw HTML, `javascript:` links
 inert.
+
+## Goals are levels, and every level and stage ends in a test
+
+The roadmap was agreed with the owner before the module was designed, and the
+migration seeds it. Its shape:
+
+- **Levels are named for what you can draw** — 基礎, 人體, 角色, 場景, 上色,
+  插畫 — not short / mid / long term. At ten minutes a day nobody can promise a
+  duration; a level is passed by its test, never by a date. The owner first
+  had four goals; splitting "short term" into the figure and the finished
+  character, and adding a foundations level below it, made six.
+- **Every level and stage carries a test**: a piece redrawn over time, which
+  gives progress a picture rather than only hours. Records attach to those
+  tests in the Record module.
+- **The order follows what the owner values**: perspective and proportion
+  before detail, "rough but good" over "it looks weird". The figure in
+  perspective (stage 5) is the stage that fixes "it looks weird"; muscle
+  anatomy comes after gesture and stays at the level of masses; composition
+  waits for the scene level, since a lone character needs little of it. Line
+  drills shrink to a warm-up rather than a stage of months.
+- **Status is set by hand**, not derived from the stages, so a level can be
+  passed on its test before every stage is ticked.
+- **The stage number is derived** from the order, so reordering never leaves a
+  stale number behind.
+- **A goal with stages is RESTRICT, not CASCADE**: the stages are the roadmap,
+  and deleting a level header is the wrong way to lose them.
+
+Goals and Roadmap are two modules in "Structure" and were built as one: a level
+is nothing without its stages, and neither page is useful alone.

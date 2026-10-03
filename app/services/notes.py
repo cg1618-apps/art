@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session, selectinload
 from app.constants import NOTE_CATEGORY, TOPIC
 from app.errors import AppError
 from app.models import Note, NoteAlias, NoteResource, NoteTopic
-from app.schemas.note import LIST_FIELDS, NAME_FIELDS, NEEDS_A_NAME
-from app.services import options
+from app.schemas.note import LIST_FIELDS, NEEDS_A_NAME
+from app.services import options, resources
+from app.services.common import require_a_name
 from app.services.search import ESCAPE, contains
 
 
@@ -98,13 +99,6 @@ def _apply_aliases(note: Note, values: list[str]) -> None:
     note.aliases.extend(NoteAlias(value=v) for v in wanted if v not in kept)
 
 
-def _resources(payload_resources) -> list[NoteResource]:
-    return [
-        NoteResource(position=position, name=resource.name, url=resource.url)
-        for position, resource in enumerate(payload_resources)
-    ]
-
-
 def _apply_lists(note: Note, lists: dict, fetched: dict) -> None:
     if lists.get("aliases") is not None:
         _apply_aliases(note, lists["aliases"])
@@ -112,7 +106,7 @@ def _apply_lists(note: Note, lists: dict, fetched: dict) -> None:
         note.topics = fetched["topics"]
     if lists.get("resources") is not None:
         # Replaced whole: the old rows are orphans and go in this flush.
-        note.resources = _resources(lists["resources"])
+        note.resources = resources.build(NoteResource, lists["resources"])
 
 
 def create(db: Session, payload) -> Note:
@@ -135,8 +129,7 @@ def update(db: Session, note_id: int, payload) -> Note:
 
     # Against the MERGED row, before anything is assigned: assigning first
     # would let an autoflush write the nameless row.
-    if not any(scalars.get(f, getattr(note, f)) for f in NAME_FIELDS):
-        raise AppError(422, f"{NEEDS_A_NAME}.")
+    require_a_name(note, scalars, NEEDS_A_NAME)
     fetched = _check_refs(db, scalars, lists)
 
     for field, value in scalars.items():

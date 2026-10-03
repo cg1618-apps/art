@@ -27,9 +27,10 @@ media tracker's by default.
 
 ## Status
 
-**Notes + Options is built; nothing else is.** It is the first of the
-modules in `docs/notes/decisions.md`, "Structure", and laid the frontend
-foundation the rest build on. The next is Goals.
+**Notes + Options and Goals + Roadmap are built.** They are the first three
+modules in `docs/notes/decisions.md`, "Structure"; the next built is Record +
+Exercise. Schedule, Timer, Tool and Reference each wait for a design
+discussion with the owner first.
 
 Each module gets its own design pass immediately before it is built —
 brainstorm into `docs/superpowers/specs/`, then plan, then implement.

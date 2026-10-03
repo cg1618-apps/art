@@ -9,8 +9,8 @@ export default function NotFound() {
       <h1 className="text-3xl font-bold">找不到這一頁</h1>
       <Empty
         action={
-          <LinkButton kind="primary" to="/notes">
-            回到筆記
+          <LinkButton kind="primary" to="/roadmap">
+            回到路線圖
           </LinkButton>
         }
       >

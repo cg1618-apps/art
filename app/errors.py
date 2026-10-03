@@ -43,6 +43,14 @@ CONSTRAINT_MESSAGES = {
     "ck_note_visibility": "Visibility is one of private, unlisted or public.",
     "uq_note_alias": "That note already carries that alias.",
     "ck_note_resource_has_a_url": "A resource needs a URL.",
+    "uq_goal_code": "Another goal already has that code.",
+    "ck_goal_has_a_name": "A goal needs at least one name.",
+    "ck_goal_status": "A goal's status is one of planned, active or achieved.",
+    "ck_goal_achieved_on_iff_achieved": "achieved_on is set only when the status is achieved.",
+    "ck_stage_has_a_name": "A stage needs at least one name.",
+    "ck_stage_status": "A stage's status is one of not_started, in_progress or passed.",
+    "ck_stage_passed_on_iff_passed": "passed_on is set only when the status is passed.",
+    "ck_stage_resource_has_a_url": "A resource needs a URL.",
 }
 
 GENERIC_MESSAGES = {

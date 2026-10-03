@@ -105,14 +105,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('routing', () => {
-  it('sends / to the notes library', async () => {
-    renderAt('/')
-    expect(await screen.findByRole('heading', { level: 1, name: '筆記' })).toBeTruthy()
-    expect(location()).toBe('/notes')
-  })
-})
-
 describe('the notes library', () => {
   it('shows each note with its category, topics and summary', async () => {
     renderAt('/notes')
