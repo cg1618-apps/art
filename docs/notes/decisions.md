@@ -352,3 +352,27 @@ Agreed with the owner before the design, and built as agreed:
   courses' own frequency wording is kept as written rather than normalised.
 - Images are deliberately absent: the owner will keep them in Google Drive or
   Google Photos, and that is designed on its own.
+
+## The timer is server-held state on the same stack
+
+`CLAUDE.md` names the stopwatch as the one feature on the platform that might
+want a different shape. It got one deliberately, on the same stack: **the
+server holds the running timer and the browser only ticks.**
+
+- A refresh, a closed tab or a sleeping laptop loses nothing, and the timer
+  shows on any device. Rejected: browser-only state, simpler and lost the first
+  time a tab closes — and a lost session is a reason to stop logging.
+- **Times come from the database clock** and each response carries `now`, so
+  a skewed laptop clock skews nothing.
+- **One timer, one row**, enforced by a unique index on a constant: there is
+  one person here.
+- **Stopping does not create the record.** It opens the record form prefilled
+  and the timer waits, stopped, until that form is saved; saving creates the
+  record and removes the timer in one transaction. The owner adds a method or
+  notes, and a refused save loses nothing.
+- **A countdown runs into overtime** rather than stopping, with one tone at
+  zero: Clip Studio Paint is in front, and the stroke in progress is finished.
+- **No interval mode and no chaining.** Line of Action already times 30s × 20,
+  and the owner chose one timer per record over a "next item" button.
+- The default countdown, 10 minutes on weekdays and 30 at the weekend, is the
+  owner's schedule held as a constant until the Schedule module owns it.

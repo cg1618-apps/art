@@ -13,6 +13,7 @@ the chain builds from zero and matches the models.
 - [`exercise`](#exercise) — what is practised (練習項目)
 - [`drill`](#drill) — one prescribed way of practising an exercise (練法)
 - [`record`](#record) — one time something was practised
+- [`active_timer`](#active_timer) — the one running timer
 - [`goal`](#goal) — a level of the roadmap, L0 to L5
 - [`stage`](#stage) — one stage of a level, with its test
 - [`stage_resource`](#stage_resource) — the links kept with a stage
@@ -114,6 +115,28 @@ here demands a timer, a drill or a stage before a record can be written.
 
 Child: `record_reference`, the `note_resource` shape — the references drawn
 from.
+
+## `active_timer`
+
+The running timer. **At most one row** (`uq_active_timer_single`, a unique
+index on `((true))`), and none when nothing is being timed.
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | |
+| `mode` | text | no | `stopwatch` or `countdown` (`ck_active_timer_mode`) |
+| `target_seconds` | integer | yes | Set for a countdown, empty for a stopwatch (`ck_active_timer_target`); ≥ 1 |
+| `started_at` | timestamptz | no | When it was first started; database clock |
+| `running_since` | timestamptz | yes | Set only while running |
+| `elapsed_seconds` | integer | no | Counted before `running_since`; ≥ 0 |
+| `stopped_at` | timestamptz | yes | Set by stop; a stopped timer waits for its record |
+| `drill_id`, `exercise_id` | integer | yes | → `drill` / `exercise`, `SET NULL`; never both (`ck_active_timer_one_activity`) |
+
+- **State is derived**: running (`running_since` set), paused (neither),
+  stopped (`stopped_at` set); `ck_active_timer_state` forbids both.
+- **Every time is the database's clock**, never a browser's: two devices look
+  at one timer.
+- `SET NULL`, not `RESTRICT`, on the activity: a running timer is not history.
 
 ## `goal`
 

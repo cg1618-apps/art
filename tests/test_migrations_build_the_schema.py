@@ -534,3 +534,39 @@ def test_exercises_and_records_downgrade_and_upgrade_again(scratch_database):
 
     _upgrade(scratch_database)
     assert _counts(scratch_database) == (24, 57)
+
+
+def test_timer_downgrade_and_upgrade_again(scratch_database):
+    """Down to 0004 drops `active_timer` and nothing else; up again brings
+    it back with its singleton index."""
+    _upgrade(scratch_database)
+    _downgrade(scratch_database, "0004_exercises_and_records")
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        tables = set(inspect(conn).get_table_names())
+    engine.dispose()
+    assert "active_timer" not in tables
+    assert RECORD_MODULE_TABLES <= tables, RECORD_MODULE_TABLES - tables
+
+    _upgrade(scratch_database)
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        indexes = {ix["name"]: ix for ix in inspect(conn).get_indexes("active_timer")}
+    engine.dispose()
+    assert indexes["uq_active_timer_single"]["unique"]
+
+
+def test_the_migrated_timer_holds_at_most_one_row(scratch_database):
+    """`create_all` builds the API tests' singleton index from the model; this
+    is the migration's own. The first insert is the mirror."""
+    from sqlalchemy.exc import IntegrityError
+
+    _upgrade(scratch_database)
+    engine = create_engine(scratch_database)
+    insert = text("INSERT INTO active_timer (mode, running_since) VALUES ('stopwatch', now())")
+    with engine.begin() as conn:
+        conn.execute(insert)
+    with pytest.raises(IntegrityError, match="uq_active_timer_single"), engine.begin() as conn:
+        conn.execute(insert)
+    engine.dispose()

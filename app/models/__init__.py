@@ -18,8 +18,10 @@ from app.models.goal import Goal, Stage, StageResource
 from app.models.note import Note, NoteAlias, NoteResource, NoteTopic
 from app.models.record import Record, RecordReference
 from app.models.system_option import SystemOption
+from app.models.timer import ActiveTimer
 
 __all__ = [
+    "ActiveTimer",
     "Drill",
     "DrillResource",
     "DrillSourceLink",

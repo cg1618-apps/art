@@ -22,6 +22,14 @@
 // waits until the defaults are known.
 //
 // Saving and deleting return to /records.
+//
+// `/records/new?from=timer` is the same form for a stopped timer
+// (components/timer/): it opens with the timer's minutes (to the nearest
+// minute, at least 1), its drill or exercise and the local date it started,
+// plus the usual defaults, and its save posts to /api/timer/record, which
+// creates the record and ends the timer together. A timer that ran over 3
+// hours says so beside the minutes. Leaving keeps the timer stopped and owed a
+// record - the top bar says 待記錄 - and 取消 goes back to /timer.
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -31,11 +39,13 @@ import { endpoints } from '../../api/endpoints'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import OptionPicker from '../../components/forms/OptionPicker'
+import ActivitySelect from '../../components/forms/ActivitySelect'
 import ResourceRows from '../../components/forms/ResourceRows'
 import RoadmapSelect from '../../components/forms/RoadmapSelect'
-import { Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
-import { ErrorNote, Loading } from '../../components/ui/states'
+import { Field, Input, LinkButton, Section, Select, TextArea } from '../../components/ui/primitives'
+import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiMutation, useApiQuery, useOptions } from '../../hooks/useApi'
+import { useTimer } from '../../hooks/useTimer'
 import {
   chosen,
   defaultToolId,
@@ -46,6 +56,7 @@ import {
   recordToPayload,
   TEST_KIND,
 } from '../../lib/records'
+import { formatClock, isLongTimer, isStopped, timerRecordForm } from '../../lib/timer'
 
 // A record shows in the log, on its exercise's page (and the exercise's
 // counts), on its stage's page when it is a test, and in options' in_use.
@@ -57,7 +68,11 @@ export default function RecordForm() {
   const isNew = id === undefined
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const drillParam = isNew ? searchParams.get('drill') : null
+  const fromTimer = isNew && searchParams.get('from') === 'timer'
+  const drillParam = isNew && !fromTimer ? searchParams.get('drill') : null
+  const timers = useTimer()
+  // The stopped timer this form records, or null.
+  const pending = fromTimer && isStopped(timers.timer) ? timers.timer : null
 
   const existing = useApiQuery(endpoints.records.detail(id), null, { enabled: !isNew })
   // The newest record, for the location default: the list is newest first.
@@ -72,9 +87,10 @@ export default function RecordForm() {
   const update = useApiMutation({ method: 'PATCH', invalidate: INVALIDATE })
 
   const [form, setForm] = useState(() =>
-    emptyRecordForm({ drill: drillParam, exercise: isNew ? searchParams.get('exercise') : null }),
+    emptyRecordForm({ drill: drillParam, exercise: isNew && !fromTimer ? searchParams.get('exercise') : null }),
   )
   const [loaded, setLoaded] = useState(null)
+  const [adoptedTimer, setAdoptedTimer] = useState(null)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const saving = create.isPending || update.isPending
@@ -83,6 +99,12 @@ export default function RecordForm() {
   if (!isNew && existing.data && loaded?.id !== existing.data.id) {
     setLoaded(existing.data)
     setForm(fromRecord(existing.data))
+  }
+
+  // And a stopped timer, once, keyed on its id.
+  if (pending && adoptedTimer !== pending.id) {
+    setAdoptedTimer(pending.id)
+    setForm(timerRecordForm(pending))
   }
 
   // A drill arriving by ?drill= brings its exercise, once.
@@ -103,14 +125,15 @@ export default function RecordForm() {
   const set = (field) => (event) => setForm((previous) => ({ ...previous, [field]: event.target.value }))
   const setValue = (field) => (value) => setForm((previous) => ({ ...previous, [field]: value }))
 
-  function setExercise(event) {
-    const exerciseId = event.target.value
-    setForm((previous) => ({ ...previous, exercise_id: exerciseId, drill_id: '' }))
+  function setActivity({ exerciseId, drillId }) {
+    setForm((previous) => ({ ...previous, exercise_id: exerciseId, drill_id: drillId }))
   }
 
   const ready =
     Boolean(exercises.data && goals.data) &&
-    (!isNew || (!latest.isPending && !tools.isPending && (!drillParam || form.exercise_id !== '')))
+    (!isNew || (!latest.isPending && !tools.isPending && (!drillParam || form.exercise_id !== ''))) &&
+    (!fromTimer || adoptedTimer !== null)
+  const leave = () => navigate(fromTimer ? '/timer' : '/records')
 
   async function submit(event) {
     event.preventDefault()
@@ -125,6 +148,12 @@ export default function RecordForm() {
       return
     }
     try {
+      if (fromTimer) {
+        await create.mutateAsync({ url: endpoints.timer.record(), body })
+        navigate('/records')
+        timers.clear()
+        return
+      }
       if (isNew) await create.mutateAsync({ url: endpoints.records.create(), body })
       else await update.mutateAsync({ url: endpoints.records.update(id), body })
       navigate('/records')
@@ -141,10 +170,31 @@ export default function RecordForm() {
 
   const drills = exercise.data?.drills ?? []
 
+  if (fromTimer && !pending) {
+    if (timers.isPending) return <Loading />
+    return (
+      <Empty action={<LinkButton to="/timer">到計時</LinkButton>}>
+        {timers.timer ? '計時還沒停止。' : '沒有待記錄的計時。'}
+      </Empty>
+    )
+  }
+
+  const durationHint =
+    pending && isLongTimer(pending) ? (
+      <span className="font-medium text-warn">
+        計時了 {formatClock(pending.elapsed_seconds)}，超過 3 小時：請確認分鐘數。
+      </span>
+    ) : (
+      '可以不填。'
+    )
+
   return (
     <form onSubmit={submit} className="mx-auto max-w-3xl space-y-6">
       <header className="space-y-1">
         <h1 className="font-display text-2xl font-bold">{isNew ? '新增紀錄' : '編輯紀錄'}</h1>
+        {pending ? (
+          <p className="text-sm text-text-muted">來自計時 · {formatClock(pending.elapsed_seconds)}</p>
+        ) : null}
         {!isNew && existing.data ? <p className="text-sm text-text-muted">{existing.data.date}</p> : null}
       </header>
 
@@ -161,7 +211,7 @@ export default function RecordForm() {
                 <Field label="日期">
                   <Input type="date" required value={form.date} onChange={set('date')} />
                 </Field>
-                <Field label="分鐘" hint="可以不填。">
+                <Field label="分鐘" hint={durationHint}>
                   <Input
                     type="number"
                     min="0"
@@ -184,28 +234,14 @@ export default function RecordForm() {
           </Section>
 
           <Section title="練了什麼">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="練習項目">
-                <Select value={form.exercise_id} onChange={setExercise}>
-                  <option value="">不指定</option>
-                  {(exercises.data ?? []).map((entry) => (
-                    <option key={entry.id} value={String(entry.id)}>
-                      {entry.display_name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="練法" hint="可以只記練習項目。">
-                <Select value={form.drill_id} onChange={set('drill_id')} disabled={form.exercise_id === ''}>
-                  <option value="">不指定練法</option>
-                  {drills.map((drill) => (
-                    <option key={drill.id} value={String(drill.id)}>
-                      {drill.display_name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+            <ActivitySelect
+              exercises={exercises.data}
+              drills={drills}
+              exerciseId={form.exercise_id}
+              drillId={form.drill_id}
+              onChange={setActivity}
+              drillHint="可以只記練習項目。"
+            />
           </Section>
 
           <Section title="類型">
@@ -260,7 +296,7 @@ export default function RecordForm() {
             saving={saving}
             error={error}
             ready={ready}
-            onCancel={() => navigate('/records')}
+            onCancel={leave}
             onDelete={isNew ? null : () => setDeleting(true)}
           />
         </>

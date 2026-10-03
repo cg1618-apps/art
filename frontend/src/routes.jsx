@@ -21,6 +21,7 @@ import RecordLibrary from './pages/library/RecordLibrary'
 import NotFound from './pages/NotFound'
 import Options from './pages/options/Options'
 import Roadmap from './pages/roadmap/Roadmap'
+import Timer from './pages/timer/Timer'
 
 export default function AppRoutes() {
   return (
@@ -48,6 +49,9 @@ export default function AppRoutes() {
         <Route path="/records" element={<RecordLibrary />} />
         <Route path="/records/new" element={<RecordForm />} />
         <Route path="/records/:id/edit" element={<RecordForm />} />
+
+        {/* One timer at a time, held by the server; its chip is in Layout. */}
+        <Route path="/timer" element={<Timer />} />
 
         <Route path="/notes" element={<NoteLibrary />} />
         <Route path="/notes/new" element={<NoteForm />} />

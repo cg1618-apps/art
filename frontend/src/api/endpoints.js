@@ -83,6 +83,21 @@ export const endpoints = {
     update: (id) => `${API}/records/${id}`,
     remove: (id) => `${API}/records/${id}`,
   },
+  // 計時: at most one timer, held by the server. GET current() is the timer
+  // or null; POST create() is a 409 while one exists. pause / resume / stop
+  // are 409 from the wrong state, and every write but create is a 404 with no
+  // timer. record() takes a record write, creates the record and removes the
+  // stopped timer in one transaction (201, the record).
+  timer: {
+    current: () => `${API}/timer`,
+    create: () => `${API}/timer`,
+    update: () => `${API}/timer`,
+    pause: () => `${API}/timer/pause`,
+    resume: () => `${API}/timer/resume`,
+    stop: () => `${API}/timer/stop`,
+    record: () => `${API}/timer/record`,
+    remove: () => `${API}/timer`,
+  },
   health: () => '/health',
 }
 

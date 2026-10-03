@@ -65,6 +65,13 @@ CONSTRAINT_MESSAGES = {
     ),
     "ck_record_duration_non_negative": "A duration cannot be negative.",
     "ck_record_reference_has_a_url": "A reference needs a URL.",
+    "uq_active_timer_single": "A timer already exists. Stop or discard it first.",
+    "ck_active_timer_mode": "A timer's mode is one of stopwatch or countdown.",
+    "ck_active_timer_target": "A countdown needs a target; a stopwatch has none.",
+    "ck_active_timer_target_positive": "A timer's target is at least 1 second.",
+    "ck_active_timer_elapsed_non_negative": "Elapsed time cannot be negative.",
+    "ck_active_timer_one_activity": "A timer names a drill or an exercise, not both.",
+    "ck_active_timer_state": "A timer cannot be running and stopped at once.",
 }
 
 GENERIC_MESSAGES = {

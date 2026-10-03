@@ -1,5 +1,6 @@
 """How every router shows the rows another row names: an option, a list of
-links, a stage. One copy, so a field added to a ref is added everywhere."""
+links, a stage, an activity. One copy, so a field added to a ref is added
+everywhere."""
 
 from app import schemas
 
@@ -26,3 +27,16 @@ def goal_ref(goal) -> schemas.GoalRef | None:
     if goal is None:
         return None
     return schemas.GoalRef(id=goal.id, code=goal.code, display_name=goal.display_name)
+
+
+def activity(row) -> schemas.Activity | None:
+    """What a record or the timer names, through its `activity_exercise` and
+    `drill`. Null when it names neither."""
+    exercise = row.activity_exercise
+    if exercise is None:
+        return None
+    drill = row.drill
+    return schemas.Activity(
+        exercise=schemas.ExerciseRef(id=exercise.id, display_name=exercise.display_name),
+        drill=None if drill is None else schemas.DrillRef(id=drill.id, display_name=drill.display_name),
+    )
