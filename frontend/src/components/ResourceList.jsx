@@ -1,4 +1,4 @@
-// Frontend: a thing's resources as links, under a 資源 heading.
+// Frontend: a thing's resources as links, under a 資源 heading (or `title`).
 //
 // The read side of components/forms/ResourceRows.jsx, shared by every detail
 // page that has resources (a note, a stage). Draws nothing when there are none.
@@ -20,10 +20,10 @@ function resourceLabel(resource) {
   }
 }
 
-export default function ResourceList({ resources }) {
+export default function ResourceList({ resources, title = '資源', as }) {
   if (!resources?.length) return null
   return (
-    <Section title="資源">
+    <Section title={title} as={as}>
       <ul className="space-y-1">
         {resources.map((resource) => (
           <li key={resource.id ?? resource.url}>

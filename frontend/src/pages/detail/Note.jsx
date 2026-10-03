@@ -18,6 +18,7 @@ import ResourceList from '../../components/ResourceList'
 import { Button, Chip, LinkButton, Section } from '../../components/ui/primitives'
 import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiQuery } from '../../hooks/useApi'
+import { otherNames } from '../../lib/names'
 import { visibilityLabel } from '../../lib/visibility'
 
 const INVALIDATE = [endpoints.notes.list(), endpoints.options.list()]
@@ -50,9 +51,7 @@ export default function Note() {
     return <ErrorNote error={query.error} />
   }
 
-  const otherNames = [note.name_cn, note.name_en, note.name_alt].filter(
-    (name) => name && name !== note.display_name,
-  )
+  const names = otherNames(note)
 
   async function remove() {
     await fetchJson(endpoints.notes.remove(note.id), { method: 'DELETE' })
@@ -79,7 +78,7 @@ export default function Note() {
             <Chip tone="warn">{visibilityLabel(note.visibility)}</Chip>
           ) : null}
         </div>
-        {otherNames.length ? <p className="text-sm text-text-muted">{otherNames.join(' · ')}</p> : null}
+        {names.length ? <p className="text-sm text-text-muted">{names.join(' · ')}</p> : null}
         {note.topics?.length ? (
           <div className="flex flex-wrap gap-1">
             {note.topics.map((topic) => (
