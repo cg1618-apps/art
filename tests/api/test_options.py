@@ -16,7 +16,9 @@ def create_option(client, **body):
 
 def test_categories_are_the_registry_in_order(client):
     body = client.get("/api/options/categories").json()
-    assert [c["key"] for c in body] == ["note_category", "topic", "method"]
+    assert [c["key"] for c in body] == [
+        "note_category", "topic", "method", "source", "location", "tool",
+    ]
     assert [c["key"] for c in body] == list(OPTION_CATEGORIES)
     assert body[0] == {
         "key": "note_category",
@@ -212,3 +214,46 @@ def test_the_right_count_deletes_cascading_topics_and_nulling_categories(client,
     assert filed_now["topics"] == []
     # The notes themselves survive.
     assert filed_now["display_name"] == "筆記"
+
+
+# --- the references the Record + Exercise module adds -------------------------
+
+
+def _record_and_drill_using(client, options):
+    """One drill with a source, one exercise with a topic, and a record naming
+    a location, a method and a tool - every reference this module adds."""
+    from tests.api.helpers import create_drill, create_exercise, create_record
+
+    exercise = create_exercise(client, topic_ids=[options["topic"].id])
+    drill = create_drill(client, exercise["id"], source_id=options["source"].id)
+    record = create_record(
+        client,
+        drill_id=drill["id"],
+        location_id=options["location"].id,
+        method_id=options["method"].id,
+        tool_id=options["tool"].id,
+    )
+    return exercise, drill, record
+
+
+def test_in_use_counts_exercise_drill_and_record_references(client, options):
+    _record_and_drill_using(client, options)
+    counts = {o["id"]: o["in_use"] for o in client.get("/api/options").json()}
+    for key in ("topic", "source", "location", "method", "tool"):
+        assert counts[options[key].id] == 1, key
+    # The mirror: an option nothing names counts nothing.
+    assert counts[options["other_method"].id] == 0
+
+
+def test_deleting_options_nulls_single_references_and_cascades_exercise_topics(client, options):
+    exercise, drill, record = _record_and_drill_using(client, options)
+    for key in ("topic", "source", "location", "method", "tool"):
+        response = client.delete(f"/api/options/{options[key].id}", params={"in_use": 1})
+        assert response.status_code == 204, (key, response.text)
+
+    assert client.get(f"/api/exercises/{exercise['id']}").json()["topics"] == []
+    assert client.get(f"/api/drills/{drill['id']}").json()["source"] is None
+    after = client.get(f"/api/records/{record['id']}").json()
+    assert (after["location"], after["method"], after["tool"]) == (None, None, None)
+    # The rows themselves survive.
+    assert after["activity"]["drill"]["id"] == drill["id"]

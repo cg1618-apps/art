@@ -326,3 +326,211 @@ def test_goals_and_roadmap_downgrade_and_upgrade_again(scratch_database):
         ).one()
     engine.dispose()
     assert tuple(counts) == (6, 16)
+
+
+RECORD_MODULE_TABLES = {
+    "exercise",
+    "exercise_alias",
+    "exercise_resource",
+    "exercise_topic",
+    "drill",
+    "drill_source_link",
+    "drill_resource",
+    "record",
+    "record_reference",
+}
+
+
+def _counts(database_url: str) -> tuple[int, int]:
+    engine = create_engine(database_url)
+    with engine.connect() as conn:
+        counts = conn.execute(
+            text("SELECT (SELECT count(*) FROM exercise), (SELECT count(*) FROM drill)")
+        ).one()
+    engine.dispose()
+    return tuple(counts)
+
+
+def test_the_exercises_drills_and_their_options_are_seeded(scratch_database):
+    """24 exercises and 57 drills, three new categories with their values.
+    The full text is in the migration; a few strings are compared verbatim
+    here as a check on the copying."""
+    _upgrade(scratch_database)
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        options = conn.execute(
+            text(
+                "SELECT category, value FROM system_option"
+                " WHERE category IN ('source', 'location', 'tool')"
+                " ORDER BY category, sort_order"
+            )
+        ).all()
+        exercises = {
+            name_en: (name_cn, stage, description)
+            for name_cn, name_en, stage, description in conn.execute(
+                text(
+                    "SELECT exercise.name_cn, exercise.name_en, stage.name_cn, exercise.description"
+                    "  FROM exercise LEFT JOIN stage ON stage.id = exercise.stage_id"
+                )
+            )
+        }
+        drills = conn.execute(
+            text(
+                "SELECT exercise.name_en, drill.name, source.value, drill.unit, drill.target,"
+                "       drill.suggested_minutes, drill.frequency, drill.instructions,"
+                "       drill.position"
+                "  FROM drill JOIN exercise ON exercise.id = drill.exercise_id"
+                "  LEFT JOIN system_option source ON source.id = drill.source_id"
+                " ORDER BY exercise.id, drill.position"
+            )
+        ).all()
+        resources = conn.execute(
+            text(
+                "SELECT exercise.name_en, r.name, r.url FROM exercise_resource r"
+                "  JOIN exercise ON exercise.id = r.exercise_id ORDER BY exercise.id"
+            )
+        ).all()
+        topics = conn.execute(text("SELECT count(*) FROM exercise_topic")).scalar()
+    engine.dispose()
+
+    by_category: dict[str, list[str]] = {}
+    for category, value in options:
+        by_category.setdefault(category, []).append(value)
+    assert by_category == {
+        "source": [
+            "Character Art School",
+            "Character Art School: Coloring",
+            "Manga Art School",
+            "Perspective Art School",
+            "自訂",
+            "其他",
+        ],
+        "location": ["台灣・家", "美國・家"],
+        "tool": ["Clip Studio Paint", "Procreate", "紙筆"],
+    }
+
+    assert len(exercises) == 24
+    assert len(drills) == 57
+    assert topics == 0  # the owner tags them
+
+    assert exercises["Lines"] == ("線條", "線條與形狀", "穩定的直線與曲線，用手肘和肩膀畫，不用手腕。")
+    assert exercises["Gesture drawing"] == (
+        "動態速寫",
+        None,
+        "限時抓動態。每個等級都練，所以不屬於任何階段。",
+    )
+    assert exercises["Hair"][1] == "完稿：頭髮、衣服、配件"
+    assert sum(stage is None for _, stage, _ in exercises.values()) == 4
+
+    by_name = {row[1]: row for row in drills}
+    assert by_name["幾何概括+翻轉"] == (
+        "Basic forms",
+        "幾何概括+翻轉",
+        "自訂",
+        "張",
+        10,
+        30,
+        "每天",
+        "隨機找有獨立物體的圖，用基本幾何（可以變形，例如橢圓）概括物體的結構，物體本身和位置都要準確。"
+        "再把物體裝進盒子，根據概括畫出翻轉後的版本，每個概括 2 個。",
+        1,
+    )
+    assert by_name["Life Gestures"][2:7] == (
+        "Character Art School",
+        "頁",
+        1,
+        5,
+        "daily / forever if possible",
+    )
+    # A blank in the sheet stays NULL.
+    assert by_name["Complete Environment Piece"][5] is None
+    assert by_name["Character Drawing"][6] is None
+    assert by_name["Static & Dynamic Forms"][7] is None
+
+    positions: dict[str, list[int]] = {}
+    for exercise, *_, position in drills:
+        positions.setdefault(exercise, []).append(position)
+    assert all(p == list(range(len(p))) for p in positions.values()), positions
+
+    assert resources == [
+        ("Mannequin", "Line of Action", "https://line-of-action.com/"),
+        ("Gesture drawing", "Line of Action", "https://line-of-action.com/"),
+    ]
+
+
+def test_the_exercise_seed_is_idempotent(scratch_database):
+    import importlib.util
+
+    _upgrade(scratch_database)
+    spec = importlib.util.spec_from_file_location(
+        "exercises_and_records", ROOT / "alembic" / "versions" / "0004_exercises_and_records.py"
+    )
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    engine = create_engine(scratch_database)
+    with engine.begin() as conn:
+        migration.seed(conn)
+    with engine.connect() as conn:
+        extra = conn.execute(
+            text(
+                "SELECT (SELECT count(*) FROM system_option"
+                "         WHERE category IN ('source', 'location', 'tool')),"
+                "       (SELECT count(*) FROM exercise_resource)"
+            )
+        ).one()
+    engine.dispose()
+    assert _counts(scratch_database) == (24, 57)
+    assert tuple(extra) == (11, 2)
+
+
+def test_a_renamed_stage_leaves_its_exercises_with_none_rather_than_failing(scratch_database):
+    _upgrade(scratch_database, "0003_goals_and_roadmap")
+    engine = create_engine(scratch_database)
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE stage SET name_cn = '比例（改）' WHERE name_cn = '比例'"))
+    engine.dispose()
+
+    _upgrade(scratch_database)
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        stages = dict(
+            conn.execute(
+                text(
+                    "SELECT name_en, stage_id FROM exercise"
+                    " WHERE name_en IN ('Body proportion', 'Mannequin', 'Lines')"
+                )
+            ).all()
+        )
+    engine.dispose()
+    assert stages["Body proportion"] is None
+    assert stages["Mannequin"] is None
+    assert stages["Lines"] is not None  # the mirror: an unrenamed stage is found
+    assert _counts(scratch_database) == (24, 57)
+
+
+def test_exercises_and_records_downgrade_and_upgrade_again(scratch_database):
+    """Down to 0003 drops the module's tables and its categories' values, and
+    puts the old category check back; up again re-seeds it."""
+    _upgrade(scratch_database)
+    _downgrade(scratch_database, "0003_goals_and_roadmap")
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        tables = set(inspect(conn).get_table_names())
+        categories = set(
+            conn.execute(text("SELECT DISTINCT category FROM system_option")).scalars()
+        )
+    assert not tables & RECORD_MODULE_TABLES, tables & RECORD_MODULE_TABLES
+    assert {"goal", "stage", "system_option", "note"} <= tables
+    assert categories == {"note_category", "topic", "method"}
+
+    from sqlalchemy.exc import IntegrityError
+
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("INSERT INTO system_option (category, value) VALUES ('tool', 'x')"))
+    engine.dispose()
+
+    _upgrade(scratch_database)
+    assert _counts(scratch_database) == (24, 57)
