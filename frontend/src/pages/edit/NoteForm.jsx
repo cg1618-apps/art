@@ -21,10 +21,11 @@ import { endpoints } from '../../api/endpoints'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
 import OptionPicker from '../../components/forms/OptionPicker'
-import { Button, Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
+import ResourceRows from '../../components/forms/ResourceRows'
+import { Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiMutation, useApiQuery, useOptions } from '../../hooks/useApi'
-import { blankToNull, keyed, rowsReducer, splitAliases } from '../../lib/rowList'
+import { blankToNull, resourcesFromApi, resourcesToPayload, splitAliases } from '../../lib/rowList'
 import { DEFAULT_VISIBILITY, VISIBILITIES } from '../../lib/visibility'
 
 // A save changes the list, this note's page, and every option's in_use count.
@@ -56,9 +57,7 @@ function fromNote(note) {
     body: note.body ?? '',
     remark: note.remark ?? '',
     visibility: note.visibility ?? DEFAULT_VISIBILITY,
-    resources: (note.resources ?? []).map((resource) =>
-      keyed({ name: resource.name ?? '', url: resource.url ?? '' }),
-    ),
+    resources: resourcesFromApi(note.resources),
   }
 }
 
@@ -75,81 +74,8 @@ function toPayload(form) {
     body: blankToNull(form.body),
     remark: blankToNull(form.remark),
     visibility: form.visibility,
-    resources: form.resources
-      .filter((row) => blankToNull(row.url))
-      .map((row) => ({ name: blankToNull(row.name), url: row.url.trim() })),
+    resources: resourcesToPayload(form.resources),
   }
-}
-
-function ResourceRows({ rows, onChange }) {
-  const dispatch = (action) => onChange(rowsReducer(rows, action))
-  return (
-    <div className="space-y-2">
-      {rows.length === 0 ? <p className="text-sm text-text-faint">還沒有資源。</p> : null}
-      {rows.map((row, index) => {
-        const number = index + 1
-        return (
-          <div
-            key={row._key}
-            role="group"
-            aria-label={`資源 ${number}`}
-            className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2"
-          >
-            <Input
-              aria-label={`資源 ${number} 名稱`}
-              placeholder="名稱"
-              value={row.name}
-              onChange={(event) => dispatch({ type: 'update', index, patch: { name: event.target.value } })}
-              className="min-w-0 flex-1 basis-32"
-            />
-            <Input
-              type="url"
-              aria-label={`資源 ${number} 連結`}
-              placeholder="https://"
-              value={row.url}
-              onChange={(event) => dispatch({ type: 'update', index, patch: { url: event.target.value } })}
-              className="min-w-0 flex-[2] basis-48"
-            />
-            <div className="flex shrink-0 gap-1">
-              <Button
-                size="sm"
-                kind="ghost"
-                aria-label={`上移資源 ${number}`}
-                title="上移"
-                disabled={index === 0}
-                onClick={() => dispatch({ type: 'move', from: index, to: index - 1 })}
-              >
-                ↑
-              </Button>
-              <Button
-                size="sm"
-                kind="ghost"
-                aria-label={`下移資源 ${number}`}
-                title="下移"
-                disabled={index === rows.length - 1}
-                onClick={() => dispatch({ type: 'move', from: index, to: index + 1 })}
-              >
-                ↓
-              </Button>
-              <Button
-                size="sm"
-                kind="ghost"
-                className="hover:text-danger"
-                aria-label={`移除資源 ${number}`}
-                title="移除"
-                onClick={() => dispatch({ type: 'remove', index })}
-              >
-                ✕
-              </Button>
-            </div>
-          </div>
-        )
-      })}
-      <Button size="sm" onClick={() => dispatch({ type: 'add', row: { name: '', url: '' } })}>
-        ＋ 新增資源
-      </Button>
-    </div>
-  )
 }
 
 export default function NoteForm() {

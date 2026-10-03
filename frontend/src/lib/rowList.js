@@ -85,3 +85,15 @@ export function splitAliases(text) {
   }
   return out
 }
+
+/** A resource list as the API serves it, `[{ id, name, url }]`, as keyed form rows. */
+export function resourcesFromApi(resources) {
+  return (resources ?? []).map((resource) => keyed({ name: resource.name ?? '', url: resource.url ?? '' }))
+}
+
+/** Resource form rows as the API's write shape, `[{ name, url }]`. A row with no link is dropped. */
+export function resourcesToPayload(rows) {
+  return rows
+    .filter((row) => blankToNull(row.url))
+    .map((row) => ({ name: blankToNull(row.name), url: row.url.trim() }))
+}
