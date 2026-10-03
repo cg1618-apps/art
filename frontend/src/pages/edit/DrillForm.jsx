@@ -8,8 +8,11 @@
 // frequency, the instructions as Markdown, the source links and the resources
 // as two lists of name + link rows, and a remark.
 //
-// Saving and deleting return to the exercise's page. Deleting a drill named by
-// records is the server's 409, shown in the dialog.
+// Saving goes to the drill's own page, as saving an exercise goes to the
+// exercise's. Cancel goes back where the form came from: the drill's page on
+// an edit, the exercise it was opened from (else the drill library) on an add.
+// Deleting goes to the exercise's page, the drill's being gone. Deleting a
+// drill named by records is the server's 409, shown in the dialog.
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -25,8 +28,8 @@ import { ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiMutation, useApiQuery, useOptions } from '../../hooks/useApi'
 import { blankToNull, integerOrNull, resourcesFromApi, resourcesToPayload } from '../../lib/rowList'
 
-// A drill shows on its exercise's page (and the exercise's drill count), and
-// a source's in_use count moves.
+// A drill shows in the drill library, on its own page, on its exercise's page
+// (and the exercise's drill count), and a source's in_use count moves.
 const INVALIDATE = [endpoints.drills.list(), endpoints.exercises.list(), endpoints.options.list()]
 
 function emptyForm(exerciseId) {
@@ -106,9 +109,11 @@ export default function DrillForm() {
   const set = (field) => (event) => setForm((previous) => ({ ...previous, [field]: event.target.value }))
   const setValue = (field) => (value) => setForm((previous) => ({ ...previous, [field]: value }))
 
-  // Where Cancel and Delete go: the exercise the drill belongs to, else the library.
+  // Where Delete goes: the exercise the drill belonged to. Cancel goes there
+  // too on an add, and back to the drill's page on an edit.
   const exerciseId = loaded?.exercise?.id ?? integerOrNull(form.exercise_id)
-  const back = exerciseId ? `/exercises/${exerciseId}` : '/exercises'
+  const exercisePage = exerciseId ? `/exercises/${exerciseId}` : '/drills'
+  const back = isNew ? exercisePage : `/drills/${id}`
 
   async function submit(event) {
     event.preventDefault()
@@ -122,7 +127,7 @@ export default function DrillForm() {
       const saved = isNew
         ? await create.mutateAsync({ url: endpoints.drills.create(), body })
         : await update.mutateAsync({ url: endpoints.drills.update(id), body })
-      navigate(`/exercises/${saved.exercise?.id ?? body.exercise_id}`)
+      navigate(`/drills/${saved.id}`)
     } catch (caught) {
       setError(caught)
     }
@@ -131,7 +136,7 @@ export default function DrillForm() {
   async function remove() {
     await fetchJson(endpoints.drills.remove(id), { method: 'DELETE' })
     invalidateResources(queryClient, INVALIDATE, { refetchType: 'none' })
-    navigate(back)
+    navigate(exercisePage)
   }
 
   return (

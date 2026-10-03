@@ -1,8 +1,8 @@
 // The exercise pages through the real routes, with fetch mocked: the library
 // groups by stage in roadmap order with 不分階段 last and keeps its topic
-// filter in the URL; the exercise page shows its drills with 記錄 links and
-// reads its records by exercise_id; the exercise and drill forms send their
-// write shapes.
+// filter in the URL; the exercise page shows its drills, each named by a link
+// to its own page, with 記錄 links, and reads its records by exercise_id; the
+// exercise and drill forms send their write shapes.
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -151,6 +151,7 @@ describe('an exercise', () => {
 
     const drills = screen.getByRole('list', { name: '練法' })
     expect(within(drills).getByRole('heading', { name: '基本線條' })).toBeTruthy()
+    expect(within(drills).getByRole('link', { name: '基本線條' }).getAttribute('href')).toBe('/drills/5')
     expect(within(drills).getByText('1 頁 · 10 分鐘 · 每天（暖身）')).toBeTruthy()
     expect(within(drills).getByText('弧線').tagName).toBe('STRONG')
     expect(within(drills).getByRole('link', { name: /Line of Action/ }).getAttribute('href')).toBe(
@@ -238,7 +239,7 @@ describe('the drill form', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '資源 1 連結' }), { target: { value: 'https://r.example' } })
 
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
-    await waitFor(() => expect(currentLocation()).toBe('/exercises/1'))
+    await waitFor(() => expect(currentLocation()).toBe('/drills/6'))
     expect(writes('POST')[0].url).toBe('/api/drills')
     expect(writes('POST')[0].body).toEqual({
       exercise_id: 1,

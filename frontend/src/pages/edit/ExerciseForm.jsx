@@ -26,9 +26,15 @@ import { invalidateResources, useApiMutation, useApiQuery, useOptions } from '..
 import { parseTarget, targetValue } from '../../lib/roadmap'
 import { blankToNull, resourcesFromApi, resourcesToPayload, splitAliases } from '../../lib/rowList'
 
-// A save changes the library, this exercise's page, its stage's page and every
-// topic's in_use count.
-const INVALIDATE = [endpoints.exercises.list(), endpoints.stages.list(), endpoints.options.list()]
+// A save changes the library, this exercise's page, its drills in the drill
+// library (their exercise's name, stage and topics), its stage's page and
+// every topic's in_use count.
+const INVALIDATE = [
+  endpoints.exercises.list(),
+  endpoints.drills.list(),
+  endpoints.stages.list(),
+  endpoints.options.list(),
+]
 
 const EMPTY = {
   name_cn: '',

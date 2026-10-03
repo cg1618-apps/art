@@ -182,6 +182,29 @@ class DrillResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class DrillSummary(BaseModel):
+    """A row of the drill list: the drill, with its exercise's stage and
+    topics so the list can group and filter without a second read."""
+
+    id: int
+    display_name: str = ""
+    name: str | None = None
+    exercise: ExerciseRef
+    # The exercise's stage and topics; a drill has neither of its own.
+    stage: StageRef | None = None
+    topics: list[OptionRef] = []
+    source: OptionRef | None = None
+    unit: str | None = None
+    target: int | None = None
+    suggested_minutes: int | None = None
+    frequency: str | None = None
+    # Records naming this drill.
+    record_count: int = 0
+    # Their durations summed; a record with none counts as zero.
+    total_minutes: int = 0
+    updated_at: datetime | None = None
+
+
 class ExerciseSummary(BaseModel):
     id: int
     display_name: str = ""

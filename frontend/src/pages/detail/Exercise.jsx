@@ -5,17 +5,13 @@
 // and topics (each a link to the library filtered by it), the description,
 // the resources, the remark.
 //
-// Then its drills as cards - source, the round (unit × target), suggested
-// minutes, frequency, the Markdown instructions, the source links and
-// resources - each with 記錄 (a new record for that drill), 開始計時 and 編輯;
-// and the
-// exercise's records, directly or through a drill, newest first, under the
+// Then its drills as cards - the name linking to the drill's own page, source,
+// the round (unit × target), suggested minutes, frequency, the Markdown
+// instructions, the source links and resources - each with 記錄 (a new record
+// for that drill), 開始計時 (components/timer/StartTimerButton) and 編輯; and
+// the exercise's records, directly or through a drill, newest first, under the
 // total minutes. 編輯 and 刪除 close the page; deleting an exercise that still
 // has drills or records is the server's 409, shown in the dialog.
-//
-// 開始計時 starts a countdown of the day's default length (lib/timer.js) with
-// the drill attached and goes to /timer. With a timer already there - only one
-// at a time - it just goes to /timer.
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -26,46 +22,25 @@ import DeleteDialog from '../../components/forms/DeleteDialog'
 import Markdown from '../../components/Markdown'
 import RecordList from '../../components/RecordList'
 import ResourceList from '../../components/ResourceList'
+import StartTimerButton from '../../components/timer/StartTimerButton'
 import { Button, Card, Chip, LinkButton, Section } from '../../components/ui/primitives'
 import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiQuery } from '../../hooks/useApi'
-import { useTimer } from '../../hooks/useTimer'
 import { drillAmount, minutesLabel, NO_STAGE_TITLE, stageTitle } from '../../lib/exercises'
 import { otherNames } from '../../lib/names'
-import { COUNTDOWN, defaultCountdownMinutes, startPayload } from '../../lib/timer'
 
 const INVALIDATE = [endpoints.exercises.list(), endpoints.options.list()]
-
-function StartTimerButton({ drill }) {
-  const { timer, start } = useTimer()
-  const navigate = useNavigate()
-  const [starting, setStarting] = useState(false)
-
-  async function begin() {
-    if (!timer) {
-      setStarting(true)
-      try {
-        await start(startPayload({ mode: COUNTDOWN, minutes: defaultCountdownMinutes(), drillId: drill.id }))
-      } catch {
-        // A 409 is a timer started elsewhere; /timer shows it, or the error.
-      }
-    }
-    navigate('/timer')
-  }
-
-  return (
-    <Button size="sm" onClick={begin} disabled={starting} aria-label={`為「${drill.display_name}」開始計時`}>
-      開始計時
-    </Button>
-  )
-}
 
 function DrillCard({ drill }) {
   const facts = [drillAmount(drill), minutesLabel(drill.suggested_minutes), drill.frequency].filter(Boolean)
   return (
     <Card className="space-y-3">
       <div className="flex flex-wrap items-baseline gap-2">
-        <h3 className="font-display text-lg font-bold">{drill.display_name}</h3>
+        <h3 className="font-display text-lg font-bold">
+          <Link to={`/drills/${drill.id}`} className="hover:text-brand hover:underline">
+            {drill.display_name}
+          </Link>
+        </h3>
         {drill.source ? (
           <Chip tone="brand" title={drill.source.description || undefined}>
             {drill.source.value}

@@ -1,11 +1,19 @@
 """Drills over HTTP: CRUD with source, source links and resources, the name
 falling back to the exercise's, the positive-number rules, moving between
-exercises, and the refused delete.
+exercises, the refused delete; and the list's order, filters and counts.
 
-Every refusal has a mirror that succeeds against the same setup.
+Every refusal has a mirror that succeeds against the same setup. Every filter
+test makes a row the filter must leave out, so a filter that did nothing would
+fail.
 """
 
-from tests.api.helpers import create_drill, create_exercise, create_record
+from tests.api.helpers import (
+    create_drill,
+    create_exercise,
+    create_goal,
+    create_record,
+    create_stage,
+)
 
 
 def test_a_drill_round_trips_through_create_read_update_delete(client, options):
@@ -150,3 +158,156 @@ def test_a_missing_drill_is_404(client):
     assert client.get("/api/drills/999999").status_code == 404
     assert client.patch("/api/drills/999999", json={"name": "x"}).status_code == 404
     assert client.delete("/api/drills/999999").status_code == 404
+
+
+# --- the list -----------------------------------------------------------------
+
+
+def _names(client, **params):
+    response = client.get("/api/drills", params=params)
+    assert response.status_code == 200, response.text
+    return [d["display_name"] for d in response.json()]
+
+
+def test_the_list_is_in_roadmap_order_then_by_position(client):
+    l0 = create_goal(client, "L0", position=0)
+    l1 = create_goal(client, "L1", position=1)
+    later = create_stage(client, l1["id"], name_cn="比例")
+    earlier = create_stage(client, l0["id"], name_cn="線條與形狀")
+    gesture = create_exercise(client, name_cn="動態速寫")
+    mannequin = create_exercise(client, name_cn="人偶", stage_id=later["id"])
+    shapes = create_exercise(client, name_cn="2D 形狀", stage_id=earlier["id"])
+    create_drill(client, gesture["id"], name="三十秒")
+    create_drill(client, mannequin["id"], name="骨架五步", position=1)
+    create_drill(client, mannequin["id"], name="盒子人", position=0)
+    create_drill(client, shapes["id"])  # no name: falls back to the exercise's
+    assert _names(client) == ["2D 形狀", "盒子人", "骨架五步", "三十秒"]
+
+
+def test_the_summary_carries_its_exercise_stage_and_topics(client, options):
+    goal = create_goal(client)
+    stage = create_stage(client, goal["id"], name_cn="線條與形狀")
+    exercise = create_exercise(
+        client, name_cn="線條", stage_id=stage["id"], topic_ids=[options["topic"].id]
+    )
+    drill = create_drill(
+        client,
+        exercise["id"],
+        name="基本線條",
+        source_id=options["source"].id,
+        instructions="畫滿一頁",
+        unit="頁",
+        target=2,
+        suggested_minutes=15,
+        frequency="每天",
+    )
+    assert client.get("/api/drills").json() == [
+        {
+            "id": drill["id"],
+            "display_name": "基本線條",
+            "name": "基本線條",
+            "exercise": {"id": exercise["id"], "display_name": "線條"},
+            "stage": {"id": stage["id"], "number": 0, "display_name": "線條與形狀"},
+            "topics": [{"id": options["topic"].id, "value": "透視", "description": "空間的遠近"}],
+            "source": {
+                "id": options["source"].id,
+                "value": "Character Art School",
+                "description": None,
+            },
+            "unit": "頁",
+            "target": 2,
+            "suggested_minutes": 15,
+            "frequency": "每天",
+            "record_count": 0,
+            "total_minutes": 0,
+            "updated_at": drill["updated_at"],
+        }
+    ]
+
+
+def test_search_matches_the_drill_name_its_instructions_and_its_exercise(client):
+    lines = create_exercise(client, name_cn="線條", aliases=["warm-up"])
+    hands = create_exercise(client, name_cn="手", name_en="Hands")
+    create_drill(client, lines["id"], name="基本線條")
+    create_drill(client, hands["id"], name="手勢", instructions="畫二十個比例草圖")
+    create_drill(client, hands["id"], name="骨架")
+    assert _names(client, q="基本") == ["基本線條"]
+    assert _names(client, q="比例") == ["手勢"]
+    assert _names(client, q="WARM") == ["基本線條"]
+    assert _names(client, q="hands") == ["手勢", "骨架"]
+    assert _names(client, q="%") == []
+
+
+def test_the_exercise_filter_means_any_of(client):
+    one = create_exercise(client, name_cn="線條")
+    two = create_exercise(client, name_cn="形狀")
+    three = create_exercise(client, name_cn="手")
+    create_drill(client, one["id"], name="a")
+    create_drill(client, two["id"], name="b")
+    create_drill(client, three["id"], name="c")
+    assert _names(client, exercise_id=[one["id"]]) == ["a"]
+    assert _names(client, exercise_id=[one["id"], two["id"]]) == ["b", "a"]
+
+
+def test_the_stage_filters_go_through_the_exercise(client):
+    goal = create_goal(client)
+    stage = create_stage(client, goal["id"], name_cn="線條與形狀")
+    other = create_stage(client, goal["id"], name_cn="比例")
+    staged = create_exercise(client, name_cn="線條", stage_id=stage["id"])
+    elsewhere = create_exercise(client, name_cn="人偶", stage_id=other["id"])
+    unstaged = create_exercise(client, name_cn="動態速寫")
+    create_drill(client, staged["id"], name="a")
+    create_drill(client, elsewhere["id"], name="b")
+    create_drill(client, unstaged["id"], name="c")
+    assert _names(client, stage_id=[stage["id"]]) == ["a"]
+    assert _names(client, stage_id=[stage["id"], other["id"]]) == ["a", "b"]
+    assert _names(client, no_stage="true") == ["c"]
+
+
+def test_the_topic_filter_goes_through_the_exercise(client, options):
+    perspective = create_exercise(client, name_cn="透視方塊", topic_ids=[options["topic"].id])
+    body = create_exercise(client, name_cn="人偶", topic_ids=[options["other_topic"].id])
+    plain = create_exercise(client, name_cn="線條")
+    create_drill(client, perspective["id"], name="a")
+    create_drill(client, body["id"], name="b")
+    create_drill(client, plain["id"], name="c")
+    assert _names(client, topic_id=[options["topic"].id]) == ["a"]
+    assert _names(client, topic_id=[options["topic"].id, options["other_topic"].id]) == [
+        "b",
+        "a",
+    ]
+
+
+def test_the_source_filter_leaves_out_other_sources_and_none(client, make_option):
+    school = make_option("source", "Character Art School")
+    book = make_option("source", "Figure Drawing")
+    exercise = create_exercise(client)
+    create_drill(client, exercise["id"], name="a", source_id=school.id)
+    create_drill(client, exercise["id"], name="b", source_id=book.id)
+    create_drill(client, exercise["id"], name="c")
+    assert _names(client, source_id=[school.id]) == ["a"]
+    assert _names(client, source_id=[school.id, book.id]) == ["a", "b"]
+
+
+def test_filters_narrow_each_other(client, options):
+    topical = create_exercise(client, name_cn="透視方塊", topic_ids=[options["topic"].id])
+    plain = create_exercise(client, name_cn="線條")
+    create_drill(client, topical["id"], name="a", source_id=options["source"].id)
+    create_drill(client, topical["id"], name="b")
+    create_drill(client, plain["id"], name="c", source_id=options["source"].id)
+    assert _names(client, topic_id=[options["topic"].id], source_id=[options["source"].id]) == ["a"]
+
+
+def test_counts_are_the_records_naming_the_drill(client):
+    exercise = create_exercise(client)
+    drill = create_drill(client, exercise["id"], name="a")
+    other = create_drill(client, exercise["id"], name="b")
+    create_record(client, drill_id=drill["id"], duration_minutes=15)
+    create_record(client, drill_id=drill["id"])  # no duration: a record, zero minutes
+    create_record(client, drill_id=other["id"], duration_minutes=40)
+    # Names the exercise, not a drill: counted on neither.
+    create_record(client, exercise_id=exercise["id"], duration_minutes=99)
+
+    listed = {d["id"]: d for d in client.get("/api/drills").json()}
+    assert (listed[drill["id"]]["record_count"], listed[drill["id"]]["total_minutes"]) == (2, 15)
+    assert (listed[other["id"]]["record_count"], listed[other["id"]]["total_minutes"]) == (1, 40)

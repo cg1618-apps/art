@@ -100,6 +100,21 @@ def totals_by_exercise(db: Session, exercise_ids: list[int]) -> dict[int, tuple[
     return {row[0]: (row[1], row[2]) for row in db.execute(query)}
 
 
+def totals_by_drill(db: Session, drill_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """Drill id -> (records, minutes), counting records that name the drill.
+    A record with no duration adds no minutes."""
+    query = (
+        select(
+            Record.drill_id,
+            func.count(Record.id),
+            func.coalesce(func.sum(Record.duration_minutes), 0),
+        )
+        .where(Record.drill_id.in_(drill_ids))
+        .group_by(Record.drill_id)
+    )
+    return {row[0]: (row[1], row[2]) for row in db.execute(query)}
+
+
 # --- reading ------------------------------------------------------------------
 
 
