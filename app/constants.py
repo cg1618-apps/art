@@ -48,6 +48,15 @@ class StageStatus(StrEnum):
     PASSED = "passed"
 
 
+class RecordKind(StrEnum):
+    """What a record is (練習 / 作品 / 測驗). `test` is the only kind that
+    names a stage or a level (`ck_record_test_target`)."""
+
+    PRACTICE = "practice"
+    PIECE = "piece"
+    TEST = "test"
+
+
 @dataclass(frozen=True)
 class OptionCategory:
     """One category of `system_option` rows.
@@ -65,6 +74,9 @@ class OptionCategory:
 NOTE_CATEGORY = "note_category"
 TOPIC = "topic"
 METHOD = "method"
+SOURCE = "source"
+LOCATION = "location"
+TOOL = "tool"
 
 #: In the order the Options page shows them. A key here is the only thing
 #: `ck_system_option_category` accepts, so removing one is a migration.
@@ -79,12 +91,27 @@ OPTION_CATEGORIES: dict[str, OptionCategory] = {
         OptionCategory(
             key=TOPIC,
             label="主題",
-            description="筆記談的是畫畫的哪個面向，例如透視、人體、光影。一則筆記可以有多個主題。",
+            description="筆記或練習項目談的是畫畫的哪個面向，例如透視、人體、光影。可以有多個主題。",
         ),
         OptionCategory(
             key=METHOD,
             label="方法",
             description="一次練習是怎麼畫的：臨摹、描寫、速寫、創作等。由練習紀錄使用。",
+        ),
+        OptionCategory(
+            key=SOURCE,
+            label="來源",
+            description="一個練法出自哪裡：哪一門課，或是自己訂的。每個練法最多一個，可以不填。",
+        ),
+        OptionCategory(
+            key=LOCATION,
+            label="地點",
+            description="一次練習是在哪裡畫的。由練習紀錄使用，可以不填。",
+        ),
+        OptionCategory(
+            key=TOOL,
+            label="工具",
+            description="一次練習用什麼畫的：哪個軟體，或是紙筆。由練習紀錄使用，可以不填。",
         ),
     )
 }

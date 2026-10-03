@@ -121,12 +121,12 @@ describe('the options page', () => {
     renderOptions()
     fireEvent.click(await screen.findByRole('button', { name: '刪除「名詞」' }))
     const dialog = screen.getByRole('dialog')
-    expect(dialog.textContent).toContain('3 則筆記用到它')
+    expect(dialog.textContent).toContain('3 處用到它')
 
     const readsBefore = optionReads().length
     fireEvent.click(within(dialog).getByRole('button', { name: '刪除' }))
     expect(await within(dialog).findByText('使用數已經變了。')).toBeTruthy()
-    expect(dialog.textContent).toContain('5 則筆記用到它')
+    expect(dialog.textContent).toContain('5 處用到它')
     expect(calls.find((call) => call.method === 'DELETE').url).toBe('/api/options/1?in_use=3')
     // The page refetches behind the dialog.
     await waitFor(() => expect(optionReads().length).toBeGreaterThan(readsBefore))

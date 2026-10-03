@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.constants import GoalStatus
 from app.errors import AppError
-from app.models import Goal, Stage
+from app.models import Goal, Record, Stage
 from app.schemas.goal import GOAL_NEEDS_A_NAME
+from app.services import records
 from app.services.common import check_dated_status, require_a_name
 
 DUPLICATE_CODE = "Another goal already has that code."
@@ -77,7 +78,9 @@ def update(db: Session, goal_id: int, payload) -> Goal:
 def delete(db: Session, goal_id: int) -> None:
     """Refused while the goal has stages: they are the roadmap, and losing
     them by deleting a level header would be the wrong surprise. Move or
-    delete them first. `stage.goal_id`'s RESTRICT is the backstop."""
+    delete them first. `stage.goal_id`'s RESTRICT is the backstop.
+
+    Refused too while test records name the goal: 409 `{detail, records}`."""
     goal = get(db, goal_id)
     count = db.query(func.count(Stage.id)).filter(Stage.goal_id == goal.id).scalar()
     if count:
@@ -87,5 +90,6 @@ def delete(db: Session, goal_id: int) -> None:
             "Move or delete them first.",
             stages=count,
         )
+    records.refuse_if_named(db, "goal", Record.goal_id == goal.id)
     db.delete(goal)
     db.commit()

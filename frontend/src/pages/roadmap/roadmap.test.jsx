@@ -1,7 +1,8 @@
 // The roadmap pages through the real routes, with fetch mocked: the roadmap
 // draws every goal and its stages and marks the current stage; a status
 // change and a move send the PATCH bodies; the goal form shows the server's
-// 409 when a goal with stages is deleted; the stage form and page.
+// 409 when a goal with stages is deleted; the stage form and page, with the
+// stage's exercises and test records.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -68,6 +69,27 @@ const STAGE = {
   resources: [{ id: 1, name: '講座', url: 'https://example.com/lines' }],
 }
 
+const STAGE_EXERCISES = [
+  { id: 1, display_name: '線條', stage: { id: 11, number: 1, display_name: '線條與形狀' }, drill_count: 2, total_minutes: 50 },
+]
+
+const TEST_RECORDS = [
+  {
+    id: 70,
+    date: '2026-10-02',
+    location: null,
+    duration_minutes: 45,
+    activity: { exercise: { id: 1, display_name: '線條' }, drill: null },
+    kind: 'test',
+    stage: { id: 11, number: 1, display_name: '線條與形狀' },
+    goal: null,
+    method: null,
+    tool: null,
+    references: [],
+    notes: '一頁都穩了',
+  },
+]
+
 let calls
 let handler
 
@@ -80,6 +102,8 @@ function defaultResponse(call) {
   if (path === '/api/goals') return json(GOALS)
   if (path === '/api/goals/1') return json(GOALS[0])
   if (path === '/api/stages/11') return json(STAGE)
+  if (path === '/api/exercises') return json(STAGE_EXERCISES)
+  if (path === '/api/records') return json(TEST_RECORDS)
   return json([])
 }
 
@@ -132,7 +156,7 @@ describe('routing', () => {
     expect(location()).toBe('/roadmap')
     const nav = screen.getAllByRole('navigation', { name: '主要' })[0]
     const links = within(nav).getAllByRole('link').map((link) => link.textContent)
-    expect(links.slice(1)).toEqual(['路線圖', '筆記', '選項'])
+    expect(links.slice(1)).toEqual(['路線圖', '練習', '紀錄', '筆記', '選項'])
   })
 })
 
@@ -257,6 +281,21 @@ describe('a stage', () => {
     expect(screen.getByText('一頁穩定的線條。')).toBeTruthy()
     expect(screen.getByRole('link', { name: /講座/ }).getAttribute('href')).toBe('https://example.com/lines')
     expect(screen.getByText('慢慢來')).toBeTruthy()
+  })
+
+  it('lists its exercises and its test records, each linked', async () => {
+    renderAt('/roadmap/stages/11')
+    const exercises = await screen.findByRole('list', { name: '這個階段的練習' })
+    expect(within(exercises).getByRole('link', { name: '線條' }).getAttribute('href')).toBe('/exercises/1')
+    expect(within(exercises).getByText('2 個練法 · 50 分鐘')).toBeTruthy()
+
+    const tests = await screen.findByRole('list', { name: '這個階段的測驗紀錄' })
+    expect(within(tests).getByText('一頁都穩了')).toBeTruthy()
+    expect(within(tests).getByRole('link', { name: '編輯 2026-10-02 的紀錄' }).getAttribute('href')).toBe(
+      '/records/70/edit',
+    )
+    expect(calls.some((call) => call.url === '/api/exercises?stage_id=11')).toBe(true)
+    expect(calls.some((call) => call.url === '/api/records?stage_id=11&kind=test')).toBe(true)
   })
 
   it('adds a stage to the goal it was opened from, with its resources', async () => {

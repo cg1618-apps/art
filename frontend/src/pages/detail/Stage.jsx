@@ -3,8 +3,10 @@
 // Note's detail shape: one reading column. Above the name, the stage's number
 // and the goal it belongs to (a link back to the roadmap); then its status and
 // the date it was passed, the focus (description), the test piece, the
-// resources as links, the remark, then 編輯 and 刪除. A section with nothing
-// in it is not drawn.
+// resources as links, the remark; then the stage's exercises (each a link to
+// its page) and its test records, newest first; then 編輯 and 刪除. A section
+// with nothing in it is not drawn, except those two lists, which say they are
+// empty: an empty one is a gap in the plan, not a missing field.
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -12,13 +14,50 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { fetchJson } from '../../api/client'
 import { endpoints } from '../../api/endpoints'
 import DeleteDialog from '../../components/forms/DeleteDialog'
+import RecordList from '../../components/RecordList'
 import ResourceList from '../../components/ResourceList'
 import { Button, Chip, LinkButton, Section } from '../../components/ui/primitives'
 import { Empty, ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiQuery } from '../../hooks/useApi'
+import { otherNames } from '../../lib/names'
+import { TEST_KIND } from '../../lib/records'
 import { stageStatusLabel, stageStatusTone } from '../../lib/roadmap'
 
 const INVALIDATE = [endpoints.goals.list(), endpoints.stages.list()]
+
+function StageExercises({ stageId }) {
+  const exercises = useApiQuery(endpoints.exercises.list(), { stage_id: stageId })
+  let body
+  if (exercises.isPending) body = <Loading />
+  else if (exercises.error) body = <ErrorNote error={exercises.error} />
+  else if (!exercises.data.length) body = <p className="text-sm text-text-faint">這個階段還沒有練習項目。</p>
+  else
+    body = (
+      <ul className="space-y-1" aria-label="這個階段的練習">
+        {exercises.data.map((exercise) => (
+          <li key={exercise.id} className="flex flex-wrap items-baseline gap-x-2">
+            <Link to={`/exercises/${exercise.id}`} className="font-medium text-text hover:text-brand hover:underline">
+              {exercise.display_name}
+            </Link>
+            <span className="text-xs tabular-nums text-text-faint">
+              {exercise.drill_count ?? 0} 個練法 · {exercise.total_minutes ?? 0} 分鐘
+            </span>
+          </li>
+        ))}
+      </ul>
+    )
+  return <Section title="練習">{body}</Section>
+}
+
+function StageTests({ stageId }) {
+  const records = useApiQuery(endpoints.records.list(), { stage_id: stageId, kind: TEST_KIND })
+  let body
+  if (records.isPending) body = <Loading />
+  else if (records.error) body = <ErrorNote error={records.error} />
+  else if (!records.data.length) body = <p className="text-sm text-text-faint">還沒有測驗紀錄。</p>
+  else body = <RecordList records={records.data} label="這個階段的測驗紀錄" />
+  return <Section title="測驗紀錄">{body}</Section>
+}
 
 export default function Stage() {
   const { id } = useParams()
@@ -36,9 +75,7 @@ export default function Stage() {
     return <ErrorNote error={query.error} />
   }
 
-  const otherNames = [stage.name_cn, stage.name_en, stage.name_alt].filter(
-    (name) => name && name !== stage.display_name,
-  )
+  const names = otherNames(stage)
 
   async function remove() {
     await fetchJson(endpoints.stages.remove(stage.id), { method: 'DELETE' })
@@ -66,7 +103,7 @@ export default function Stage() {
           <Chip tone={stageStatusTone(stage.status)}>{stageStatusLabel(stage.status)}</Chip>
           {stage.passed_on ? <span className="text-sm text-text-faint">{stage.passed_on} 通過</span> : null}
         </div>
-        {otherNames.length ? <p className="text-sm text-text-muted">{otherNames.join(' · ')}</p> : null}
+        {names.length ? <p className="text-sm text-text-muted">{names.join(' · ')}</p> : null}
       </header>
 
       {stage.description ? (
@@ -88,6 +125,10 @@ export default function Stage() {
           <p className="whitespace-pre-line text-sm leading-relaxed text-text-muted">{stage.remark}</p>
         </Section>
       ) : null}
+
+      <StageExercises stageId={stage.id} />
+
+      <StageTests stageId={stage.id} />
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <LinkButton to={`/roadmap/stages/${stage.id}/edit`} kind="primary">

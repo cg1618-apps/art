@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.constants import OPTION_CATEGORIES
 from app.errors import AppError, StaleCountError
-from app.models import Note, NoteTopic, SystemOption
+from app.models import Drill, ExerciseTopic, Note, NoteTopic, Record, SystemOption
 
 DUPLICATE = "That category already has that value."
 
@@ -18,22 +18,31 @@ def _category_position(category: str) -> int:
     return list(OPTION_CATEGORIES).index(category)
 
 
-def in_use_counts(db: Session, ids: list[int] | None = None) -> dict[int, int]:
-    """Per option: notes whose category is it, plus topic links naming it.
+#: Every column naming an option. Single references are SET NULL by the
+#: delete, tag links cascade; either way each one is a link the delete removes.
+#: A reference added anywhere must be added here, or the Options page
+#: understates what a delete costs.
+REFERENCES = (
+    Note.category_id,
+    NoteTopic.option_id,
+    ExerciseTopic.option_id,
+    Drill.source_id,
+    Record.location_id,
+    Record.method_id,
+    Record.tool_id,
+)
 
-    Two grouped queries rather than a join, so a note carrying an option both
-    as its category and as a topic counts twice - which is right, since the
-    delete removes both references.
+
+def in_use_counts(db: Session, ids: list[int] | None = None) -> dict[int, int]:
+    """Per option: every row in `REFERENCES` naming it.
+
+    One grouped query per column rather than a join, so a row naming an
+    option twice - a note carrying it as its category and as a topic - counts
+    twice, which is right, since the delete removes both references.
     """
     counts: dict[int, int] = {}
-    queries = (
-        select(Note.category_id, func.count()).where(Note.category_id.is_not(None)).group_by(
-            Note.category_id
-        ),
-        select(NoteTopic.option_id, func.count()).group_by(NoteTopic.option_id),
-    )
-    for query in queries:
-        column = query.selected_columns[0]
+    for column in REFERENCES:
+        query = select(column, func.count()).where(column.is_not(None)).group_by(column)
         if ids is not None:
             query = query.where(column.in_(ids))
         for option_id, count in db.execute(query):
@@ -118,8 +127,8 @@ def update(db: Session, option_id: int, payload) -> SystemOption:
 def delete(db: Session, option_id: int, expected_in_use: int) -> None:
     """Delete, with the count the page showed echoed back.
 
-    On success the database does the rest: topic links cascade and
-    `note.category_id` is set NULL (the foreign keys' ON DELETE).
+    On success the database does the rest: tag links cascade and single
+    references are set NULL (the foreign keys' ON DELETE).
     """
     row = get(db, option_id)
     actual = in_use(db, option_id)
@@ -152,3 +161,11 @@ def fetch_in_category(db: Session, ids: list[int], category: str) -> list[System
                 f"Option {option_id} is a {row.category} option, not a {category} ({label}) option.",
             )
     return [found[i] for i in wanted]
+
+
+def check_single(db: Session, values: dict, fields: dict[str, str]) -> None:
+    """For each `field: category` in `fields`, a non-null id in `values`
+    must name an option of that category; 422 otherwise."""
+    for field, category in fields.items():
+        if values.get(field) is not None:
+            fetch_in_category(db, [values[field]], category)

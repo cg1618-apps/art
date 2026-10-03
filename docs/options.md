@@ -17,7 +17,8 @@ the tier: **does code branch on the exact value?**
 | `Visibility` | `private`, `unlisted`, `public` | `note.visibility` (reserved; nothing reads it yet) |
 | `GoalStatus` | `planned`, `active`, `achieved` (計畫中, 進行中, 已達成) | `goal.status` |
 | `StageStatus` | `not_started`, `in_progress`, `passed` (未開始, 進行中, 已通過) | `stage.status` |
-| `OPTION_CATEGORIES` | `note_category`, `topic`, `method` | `system_option.category`, and the Options page's section order |
+| `RecordKind` | `practice`, `piece`, `test` (練習, 作品, 測驗) | `record.kind`; a test names a stage or a goal |
+| `OPTION_CATEGORIES` | `note_category`, `topic`, `method`, `source`, `location`, `tool` | `system_option.category`, and the Options page's section order |
 
 **Categories are registered, not typed.** Each has a key, a label and a
 description, and the Options page heads each section with the label and the
@@ -35,8 +36,11 @@ is a note to yourself, shown only on the Options page.
 | Category | Label | Read by | Seeded values |
 | --- | --- | --- | --- |
 | `note_category` | 筆記分類 | `note.category_id` (single, optional) | 名詞, 知識, 小技巧, 建議 |
-| `topic` | 主題 | `note_topic` (several per note) | 線條, 形狀, 透視, 比例, 人體, 動態, 構圖, 光影, 色彩, 特效 |
-| `method` | 方法 | the Record module, when it is built | 臨摹, 重現, 描寫, 速寫, 同人創作, 原創創作, 隨便畫 |
+| `topic` | 主題 | `note_topic`, `exercise_topic` (several each) | 線條, 形狀, 透視, 比例, 人體, 動態, 構圖, 光影, 色彩, 特效 |
+| `method` | 方法 | `record.method_id` | 臨摹, 重現, 描寫, 速寫, 同人創作, 原創創作, 隨便畫 |
+| `source` | 來源 | `drill.source_id` | Character Art School, Character Art School: Coloring, Manga Art School, Perspective Art School, 自訂, 其他 |
+| `location` | 地點 | `record.location_id` | 台灣・家, 美國・家 |
+| `tool` | 工具 | `record.tool_id` | Clip Studio Paint, Procreate, 紙筆 |
 
 The seeded `method` values carry these descriptions:
 

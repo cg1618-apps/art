@@ -50,6 +50,39 @@ export const endpoints = {
     update: (id) => `${API}/stages/${id}`,
     remove: (id) => `${API}/stages/${id}`,
   },
+  // 練習. GET list() takes ?q=, ?stage_id=, ?topic_id= and ?no_stage=true;
+  // each summary carries its stage, topics, drill count, record count and
+  // total minutes. DELETE remove(id) is a 409 { detail, drills, records }
+  // while drills or records still name it.
+  exercises: {
+    list: () => `${API}/exercises`,
+    detail: (id) => `${API}/exercises/${id}`,
+    create: () => `${API}/exercises`,
+    update: (id) => `${API}/exercises/${id}`,
+    remove: (id) => `${API}/exercises/${id}`,
+  },
+  // 練法: one prescribed way of doing an exercise. There is no drill list to
+  // read - an exercise's detail carries its drills - so list() is only the
+  // resource prefix. DELETE remove(id) is a 409 { detail, records }.
+  drills: {
+    list: () => `${API}/drills`,
+    detail: (id) => `${API}/drills/${id}`,
+    create: () => `${API}/drills`,
+    update: (id) => `${API}/drills/${id}`,
+    remove: (id) => `${API}/drills/${id}`,
+  },
+  // 紀錄. GET list() takes ?from=, ?to=, ?kind=, ?exercise_id= (directly or
+  // through a drill), ?drill_id=, ?stage_id=, ?goal_id=; newest first.
+  // summary() takes ?from=&to= and is [{ date, minutes, records }] per day -
+  // under list() so a record write invalidates it too.
+  records: {
+    list: () => `${API}/records`,
+    summary: () => `${API}/records/summary`,
+    detail: (id) => `${API}/records/${id}`,
+    create: () => `${API}/records`,
+    update: (id) => `${API}/records/${id}`,
+    remove: (id) => `${API}/records/${id}`,
+  },
   health: () => '/health',
 }
 

@@ -16,6 +16,10 @@
 //   sidebar       - the filter controls (components/layout/FilterPanel)
 //   query         - the list's useApiQuery result
 //   renderItem    - (item) => the <li>'s content
+//   renderList    - (items) => the whole list, optional: a library that groups
+//                   its items (exercises by stage, records by day) draws the
+//                   groups itself and keeps everything else here
+//   searchable    - false drops the search box, for a list the API cannot search
 //   searchPlaceholder, emptyText, noMatchText
 import { useState } from 'react'
 
@@ -39,6 +43,8 @@ export default function LibraryLayout({
   sidebar,
   query,
   renderItem,
+  renderList,
+  searchable = true,
   searchPlaceholder = '搜尋…',
   emptyText = '這裡還沒有東西。',
   noMatchText = '沒有符合條件的項目。',
@@ -59,6 +65,7 @@ export default function LibraryLayout({
   else if (query.error) body = <ErrorNote error={query.error} />
   else if (items.length === 0 && filters.isFiltered) body = <Empty action={clearButton}>{noMatchText}</Empty>
   else if (items.length === 0) body = <Empty action={addButton}>{emptyText}</Empty>
+  else if (renderList) body = renderList(items)
   else
     body = (
       <ul className="grid gap-3 sm:grid-cols-2" aria-label={title}>
@@ -87,14 +94,16 @@ export default function LibraryLayout({
 
         <div className="min-w-0 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              type="search"
-              aria-label="搜尋"
-              value={filters.search}
-              onChange={(event) => filters.setSearch(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="min-w-0 flex-1 basis-48"
-            />
+            {searchable ? (
+              <Input
+                type="search"
+                aria-label="搜尋"
+                value={filters.search}
+                onChange={(event) => filters.setSearch(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="min-w-0 flex-1 basis-48"
+              />
+            ) : null}
             <Button
               className="lg:hidden"
               aria-haspopup="dialog"

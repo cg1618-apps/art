@@ -51,6 +51,20 @@ CONSTRAINT_MESSAGES = {
     "ck_stage_status": "A stage's status is one of not_started, in_progress or passed.",
     "ck_stage_passed_on_iff_passed": "passed_on is set only when the status is passed.",
     "ck_stage_resource_has_a_url": "A resource needs a URL.",
+    "ck_exercise_has_a_name": "An exercise needs at least one name.",
+    "uq_exercise_alias": "That exercise already carries that alias.",
+    "ck_exercise_resource_has_a_url": "A resource needs a URL.",
+    "ck_drill_target_positive": "A drill's target is at least 1.",
+    "ck_drill_suggested_minutes_positive": "A drill's suggested minutes are at least 1.",
+    "ck_drill_source_link_has_a_url": "A source link needs a URL.",
+    "ck_drill_resource_has_a_url": "A resource needs a URL.",
+    "ck_record_kind": "A record's kind is one of practice, piece or test.",
+    "ck_record_one_activity": "A record names a drill or an exercise, not both.",
+    "ck_record_test_target": (
+        "A test record names exactly one stage or one goal; any other record names neither."
+    ),
+    "ck_record_duration_non_negative": "A duration cannot be negative.",
+    "ck_record_reference_has_a_url": "A reference needs a URL.",
 }
 
 GENERIC_MESSAGES = {

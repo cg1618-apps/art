@@ -134,4 +134,8 @@ def options(make_option):
         "topic": make_option("topic", "透視", description="空間的遠近"),
         "other_topic": make_option("topic", "人體"),
         "method": make_option("method", "速寫"),
+        "other_method": make_option("method", "描寫", description="看著參考圖畫"),
+        "source": make_option("source", "Character Art School"),
+        "location": make_option("location", "台灣・家"),
+        "tool": make_option("tool", "Clip Studio Paint"),
     }

@@ -4,7 +4,7 @@ Writes validate everything before they change anything, so a refused save
 changes nothing - `food`'s order.
 """
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.constants import NOTE_CATEGORY, TOPIC
@@ -12,8 +12,8 @@ from app.errors import AppError
 from app.models import Note, NoteAlias, NoteResource, NoteTopic
 from app.schemas.note import LIST_FIELDS, NEEDS_A_NAME
 from app.services import options, resources
-from app.services.common import require_a_name
-from app.services.search import ESCAPE, contains
+from app.services.common import apply_aliases, require_a_name
+from app.services.search import names_match, tagged_with
 
 
 def _summary_loaded(query):
@@ -36,19 +36,7 @@ def get(db: Session, note_id: int) -> Note:
 def matches(q: str):
     """Any name slot, an alias, or the summary. Not the body: a word inside a
     long note would bury the note you meant."""
-    term = contains(q)
-    alias_match = (
-        select(NoteAlias.note_id)
-        .where(func.lower(NoteAlias.value).like(func.lower(term), escape=ESCAPE))
-        .scalar_subquery()
-    )
-    return or_(
-        Note.name_cn.ilike(term, escape=ESCAPE),
-        Note.name_en.ilike(term, escape=ESCAPE),
-        Note.name_alt.ilike(term, escape=ESCAPE),
-        Note.summary.ilike(term, escape=ESCAPE),
-        Note.id.in_(alias_match),
-    )
+    return names_match(q, Note, NoteAlias.note_id, NoteAlias.value, Note.summary)
 
 
 def search(
@@ -65,11 +53,7 @@ def search(
     if category_id:
         query = query.filter(Note.category_id.in_(category_id))
     if topic_id:
-        query = query.filter(
-            Note.id.in_(
-                select(NoteTopic.note_id).where(NoteTopic.option_id.in_(topic_id)).scalar_subquery()
-            )
-        )
+        query = query.filter(tagged_with(Note, NoteTopic.note_id, NoteTopic.option_id, topic_id))
     rows = query.all()
     rows.sort(key=lambda r: (r.display_name.casefold(), r.id))
     return rows
@@ -89,19 +73,9 @@ def _check_refs(db: Session, scalars: dict, lists: dict) -> dict:
     return fetched
 
 
-def _apply_aliases(note: Note, values: list[str]) -> None:
-    """Reconciled by value: a kept alias keeps its row, so a save that changes
-    nothing deletes and re-inserts nothing (and cannot trip uq_note_alias
-    against the row it is replacing)."""
-    wanted = list(dict.fromkeys(values))
-    note.aliases = [row for row in note.aliases if row.value in wanted]
-    kept = {row.value for row in note.aliases}
-    note.aliases.extend(NoteAlias(value=v) for v in wanted if v not in kept)
-
-
 def _apply_lists(note: Note, lists: dict, fetched: dict) -> None:
     if lists.get("aliases") is not None:
-        _apply_aliases(note, lists["aliases"])
+        apply_aliases(note, NoteAlias, lists["aliases"])
     if "topics" in fetched:
         note.topics = fetched["topics"]
     if lists.get("resources") is not None:

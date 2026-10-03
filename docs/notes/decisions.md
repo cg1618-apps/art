@@ -321,3 +321,34 @@ migration seeds it. Its shape:
 
 Goals and Roadmap are two modules in "Structure" and were built as one: a level
 is nothing without its stages, and neither page is useful alone.
+
+## Records, exercises and drills
+
+Agreed with the owner before the design, and built as agreed:
+
+- **An exercise is `food`'s dish and a drill its recipe.** The exercise is what
+  is practised and sits on a stage; a drill is one prescribed way of doing it,
+  from a course or the owner's own notes. "Exercise type" was the working name
+  for the general thing until the owner found it awkward.
+- **One record per exercise practised.** A ten-minute session of warm-up then
+  stage work is two records, because progress is read per exercise.
+- **A record names a drill, an exercise, or neither, never both**, so the two
+  cannot disagree: through a drill the exercise is derived. `food`'s recipe
+  lines name an ingredient or a dish on the same reasoning.
+- **A test record names exactly one stage or one level.** The database holds it
+  as `num_nonnulls(stage_id, goal_id) = CASE WHEN kind = 'test' THEN 1 ELSE 0
+  END`; the first draft, `(kind = 'test') = (count = 1)`, would have let a
+  practice record carry both.
+- **Records RESTRICT what they name.** A record is history; a deleted drill
+  that silently orphaned a month of records would be the worst kind of loss.
+- **Location was kept** from the owner's old spreadsheet; "finished one unit"
+  and a "what looked weird" tag were proposed and declined. The old log was not
+  migrated.
+- **No visibility on exercises or records.** They are the practice log, never
+  shared; a finished piece is shared as a Work, which carries the field when
+  that module is built.
+- **The seed comes from what the owner already has**: their 細節指示 and the
+  assignments of the three Udemy courses they finished without practising. The
+  courses' own frequency wording is kept as written rather than normalised.
+- Images are deliberately absent: the owner will keep them in Google Drive or
+  Google Photos, and that is designed on its own.

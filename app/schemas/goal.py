@@ -170,6 +170,15 @@ class GoalRef(BaseModel):
     display_name: str = ""
 
 
+class StageRef(BaseModel):
+    """How an exercise or a record shows its stage: enough to link to it and
+    to place it on the roadmap."""
+
+    id: int
+    number: int
+    display_name: str = ""
+
+
 class StageSummary(BaseModel):
     id: int
     # Derived: every stage ordered by (goal position, stage position, id),
