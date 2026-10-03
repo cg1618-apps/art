@@ -132,6 +132,20 @@ export default function TimerProvider({ children }) {
         put(stopped)
         return stopped
       },
+      /** PATCH /api/timer - the activity and the record draft. */
+      async update(body) {
+        const updated = await send(endpoints.timer.update(), { method: 'PATCH', ...jsonBody(body) })
+        put(updated)
+        return updated
+      },
+      /**
+       * The draft as the page holds it, put in the cache before it is saved,
+       * so a page opened before the save lands - the record form, /timer -
+       * starts from it rather than from the last saved one.
+       */
+      holdDraft(draft) {
+        queryClient.setQueryData(key, (current) => (asTimer(current) ? { ...current, draft } : current))
+      },
       async discard() {
         await send(endpoints.timer.remove(), { method: 'DELETE' })
         put(null)

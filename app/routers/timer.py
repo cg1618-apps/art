@@ -33,6 +33,7 @@ def _current(db: Session) -> schemas.TimerResponse | None:
         stopped_at=row.stopped_at,
         now=now,
         activity=activity(row),
+        draft=row.draft,
     )
 
 
@@ -51,6 +52,8 @@ def start_timer(payload: schemas.TimerCreate, db: Session = Depends(get_db)):
 
 @router.patch("", response_model=schemas.TimerResponse)
 def update_timer(payload: schemas.TimerUpdate, db: Session = Depends(get_db)):
+    """The target, the activity and the record draft, in any state. A `draft`
+    sent replaces the whole draft; null clears it."""
     timer.update(db, payload)
     return _current(db)
 

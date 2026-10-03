@@ -92,6 +92,7 @@ def test_a_started_stopwatch_is_running_from_the_database_clock(client, db):
         "stopped_at": None,
         "now": created["now"],
         "activity": None,
+        "draft": None,
     }
     # Every time is the database's, not the test process's.
     assert _time(created["started_at"]) == db_now
@@ -274,6 +275,145 @@ def test_a_stopped_timer_can_still_be_patched(client, run_for, practice):
     response = client.patch("/api/timer", json={"drill_id": practice["drill"]["id"]})
     assert response.status_code == 200, response.text
     assert response.json()["activity"]["drill"]["id"] == practice["drill"]["id"]
+
+
+# --- the record draft ---------------------------------------------------------
+
+DRAFT = {
+    "kind": "piece",
+    "method_id": None,
+    "location_id": None,
+    "references": [{"name": "人體結構", "url": "https://example.com/anatomy"}],
+    "notes": "肩膀還是太窄",
+}
+
+
+def test_a_draft_round_trips_with_only_the_keys_sent(client):
+    start(client)
+    response = client.patch("/api/timer", json={"draft": DRAFT})
+    assert response.status_code == 200, response.text
+    # A key sent is kept, null included ("no location" is a choice); a key
+    # left out - tool_id, stage_id - stays absent, so its default still applies.
+    assert response.json()["draft"] == DRAFT
+    assert "tool_id" not in response.json()["draft"]
+    assert client.get("/api/timer").json()["draft"] == DRAFT
+
+
+def test_a_draft_sent_replaces_the_whole_draft(client):
+    start(client)
+    client.patch("/api/timer", json={"draft": DRAFT})
+
+    response = client.patch("/api/timer", json={"draft": {"notes": "只有這個"}})
+    assert response.status_code == 200, response.text
+    assert response.json()["draft"] == {"notes": "只有這個"}
+
+    # A PATCH that leaves `draft` out leaves it as it is.
+    client.patch("/api/timer", json={})
+    assert client.get("/api/timer").json()["draft"] == {"notes": "只有這個"}
+
+
+def test_null_clears_the_draft(client):
+    start(client)
+    client.patch("/api/timer", json={"draft": DRAFT})
+    response = client.patch("/api/timer", json={"draft": None})
+    assert response.status_code == 200, response.text
+    assert response.json()["draft"] is None
+
+
+def test_a_draft_is_type_checked_and_refuses_unknown_keys(client):
+    start(client)
+    client.patch("/api/timer", json={"draft": DRAFT})
+    for draft in (
+        {"date": "2026-10-03"},  # the timer's, not the draft's
+        {"duration_minutes": 20},
+        {"drill_id": 5},
+        {"colour": "red"},
+        {"kind": "nap"},
+        {"kind": None},
+        {"method_id": "pencil"},
+        {"references": None},
+        {"references": [{"url": "https://example.com", "page": 3}]},
+        {"notes": ["a", "b"]},
+    ):
+        response = client.patch("/api/timer", json={"draft": draft})
+        assert response.status_code == 422, (draft, response.text)
+    # Every refusal left the draft as it was.
+    assert client.get("/api/timer").json()["draft"] == DRAFT
+
+
+def test_a_half_typed_draft_is_accepted(client):
+    """No record rule applies to a draft: a test with no target yet, an id
+    naming nothing, a reference row with no link. They are the record form's
+    to refuse when the record is saved."""
+    start(client)
+    half = {
+        "kind": "test",
+        "stage_id": None,
+        "goal_id": None,
+        "method_id": 999999,
+        "references": [{"name": "還沒貼連結", "url": ""}, {"name": None, "url": "htt"}],
+        "notes": "",
+    }
+    response = client.patch("/api/timer", json={"draft": half})
+    assert response.status_code == 200, response.text
+    assert response.json()["draft"] == half
+
+
+def test_a_stopped_timer_takes_a_draft(client, run_for, practice):
+    stopped(client, run_for)
+    response = client.patch(
+        "/api/timer", json={"draft": {"notes": "停了才想到"}, "drill_id": practice["drill"]["id"]}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "stopped"
+    assert response.json()["draft"] == {"notes": "停了才想到"}
+    assert response.json()["activity"]["drill"]["id"] == practice["drill"]["id"]
+
+
+def test_a_draft_does_not_reach_the_record_unless_the_body_carries_it(client, run_for):
+    stopped(client, run_for)
+    client.patch("/api/timer", json={"draft": DRAFT})
+
+    response = client.post("/api/timer/record", json={"date": "2026-10-03"})
+    assert response.status_code == 201, response.text
+    record = response.json()
+    # The body is the record: the draft's kind, notes and references are not
+    # merged in behind it.
+    assert (record["kind"], record["notes"], record["references"]) == ("practice", None, [])
+    assert client.get("/api/timer").json() is None
+
+
+def test_the_record_body_is_saved_whatever_the_draft_says(client, run_for):
+    stopped(client, run_for)
+    client.patch("/api/timer", json={"draft": DRAFT})
+
+    response = client.post(
+        "/api/timer/record",
+        json={"date": "2026-10-03", "kind": "practice", "notes": "最後的筆記"},
+    )
+    assert response.status_code == 201, response.text
+    assert (response.json()["kind"], response.json()["notes"]) == ("practice", "最後的筆記")
+
+
+def test_a_draft_is_checked_as_a_record_only_when_saved(client, run_for):
+    """The half-typed draft goes in; sent as the record it is refused, and the
+    timer and its draft are left as they were."""
+    stopped(client, run_for)
+    client.patch("/api/timer", json={"draft": {"kind": "test"}})
+    before = client.get("/api/timer").json()
+
+    response = client.post("/api/timer/record", json={"date": "2026-10-03", "kind": "test"})
+    assert response.status_code == 422, response.text
+    assert client.get("/api/timer").json() == before
+
+
+def test_discarding_drops_the_draft_with_the_timer(client):
+    start(client)
+    client.patch("/api/timer", json={"draft": DRAFT})
+    assert client.delete("/api/timer").status_code == 204
+
+    # A new timer starts with no draft.
+    assert start(client)["draft"] is None
 
 
 # --- the activity -------------------------------------------------------------

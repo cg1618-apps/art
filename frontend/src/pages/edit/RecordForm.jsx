@@ -30,6 +30,15 @@
 // creates the record and ends the timer together. A timer that ran over 3
 // hours says so beside the minutes. Leaving keeps the timer stopped and owed a
 // record - the top bar says 待記錄 - and 取消 goes back to /timer.
+//
+// The timer's record draft opens with it (lib/timer.js's timerRecordForm), and
+// this form's edits are saved back to the timer as they are typed
+// (hooks/useDraftAutosave): leaving and coming back - or opening /timer -
+// finds them. Saving sends the draft first, then the record - whose body is
+// the record; the draft is not merged into it on the server.
+//
+// The fields other than the date and minutes are components/forms/
+// RecordFields, shared with the timer page's draft.
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -38,29 +47,25 @@ import { fetchJson } from '../../api/client'
 import { endpoints } from '../../api/endpoints'
 import DeleteDialog from '../../components/forms/DeleteDialog'
 import FormActions from '../../components/forms/FormActions'
-import OptionPicker from '../../components/forms/OptionPicker'
-import ActivitySelect from '../../components/forms/ActivitySelect'
-import ResourceRows from '../../components/forms/ResourceRows'
-import RoadmapSelect from '../../components/forms/RoadmapSelect'
-import { Field, Input, LinkButton, Section, Select, TextArea } from '../../components/ui/primitives'
+import RecordFields from '../../components/forms/RecordFields'
+import { Field, Input, LinkButton } from '../../components/ui/primitives'
 import { Empty, ErrorNote, Loading } from '../../components/ui/states'
-import { invalidateResources, useApiMutation, useApiQuery, useOptions } from '../../hooks/useApi'
+import { invalidateResources, useApiMutation, useApiQuery } from '../../hooks/useApi'
+import { useDraftAutosave } from '../../hooks/useDraftAutosave'
+import { useRecordDefaults } from '../../hooks/useRecordDefaults'
 import { useTimer } from '../../hooks/useTimer'
-import {
-  chosen,
-  defaultToolId,
-  emptyRecordForm,
-  fromRecord,
-  latestLocationId,
-  RECORD_KINDS,
-  recordToPayload,
-  TEST_KIND,
-} from '../../lib/records'
+import { emptyRecordForm, fromRecord, recordToPayload, TEST_KIND } from '../../lib/records'
 import { formatClock, isLongTimer, isStopped, timerRecordForm } from '../../lib/timer'
 
 // A record shows in the log, on its exercise's page (and the exercise's
-// counts), on its stage's page when it is a test, and in options' in_use.
-const INVALIDATE = [endpoints.records.list(), endpoints.exercises.list(), endpoints.options.list()]
+// counts, and its drill's in the drill library), on its stage's page when it
+// is a test, and in options' in_use.
+const INVALIDATE = [
+  endpoints.records.list(),
+  endpoints.exercises.list(),
+  endpoints.drills.list(),
+  endpoints.options.list(),
+]
 
 export default function RecordForm() {
   const { id } = useParams()
@@ -75,14 +80,10 @@ export default function RecordForm() {
   const pending = fromTimer && isStopped(timers.timer) ? timers.timer : null
 
   const existing = useApiQuery(endpoints.records.detail(id), null, { enabled: !isNew })
-  // The newest record, for the location default: the list is newest first.
-  const latest = useApiQuery(endpoints.records.list(), null, { enabled: isNew })
+  const recordDefaults = useRecordDefaults({ enabled: isNew })
   const arrivingDrill = useApiQuery(endpoints.drills.detail(drillParam), null, { enabled: Boolean(drillParam) })
   const exercises = useApiQuery(endpoints.exercises.list())
   const goals = useApiQuery(endpoints.goals.list())
-  const locations = useOptions('location')
-  const methods = useOptions('method')
-  const tools = useOptions('tool')
   const create = useApiMutation({ method: 'POST', invalidate: INVALIDATE })
   const update = useApiMutation({ method: 'PATCH', invalidate: INVALIDATE })
 
@@ -101,11 +102,14 @@ export default function RecordForm() {
     setForm(fromRecord(existing.data))
   }
 
-  // And a stopped timer, once, keyed on its id.
+  // And a stopped timer, once, keyed on its id - with its record draft.
   if (pending && adoptedTimer !== pending.id) {
     setAdoptedTimer(pending.id)
     setForm(timerRecordForm(pending))
   }
+
+  // A timer's form keeps its edits on the timer until it is saved.
+  const draftSaver = useDraftAutosave(pending && adoptedTimer === pending.id ? pending.id : null, form)
 
   // A drill arriving by ?drill= brings its exercise, once.
   const drillExerciseId = arrivingDrill.data?.exercise?.id
@@ -113,27 +117,24 @@ export default function RecordForm() {
     setForm((previous) => ({ ...previous, exercise_id: String(drillExerciseId) }))
   }
 
-  const exercise = useApiQuery(endpoints.exercises.detail(form.exercise_id), null, {
-    enabled: form.exercise_id !== '',
-  })
-
-  const defaults = {
-    location_id: latestLocationId(latest.data),
-    tool_id: defaultToolId(tools.data),
-  }
+  const defaults = recordDefaults.defaults
 
   const set = (field) => (event) => setForm((previous) => ({ ...previous, [field]: event.target.value }))
-  const setValue = (field) => (value) => setForm((previous) => ({ ...previous, [field]: value }))
-
-  function setActivity({ exerciseId, drillId }) {
-    setForm((previous) => ({ ...previous, exercise_id: exerciseId, drill_id: drillId }))
-  }
 
   const ready =
     Boolean(exercises.data && goals.data) &&
-    (!isNew || (!latest.isPending && !tools.isPending && (!drillParam || form.exercise_id !== ''))) &&
+    (!isNew || (!recordDefaults.isPending && (!drillParam || form.exercise_id !== ''))) &&
     (!fromTimer || adoptedTimer !== null)
-  const leave = () => navigate(fromTimer ? '/timer' : '/records')
+
+  async function leave() {
+    if (!fromTimer) {
+      navigate('/records')
+      return
+    }
+    // What was typed lands before /timer reads the timer.
+    await draftSaver.flush()
+    navigate('/timer')
+  }
 
   async function submit(event) {
     event.preventDefault()
@@ -149,6 +150,9 @@ export default function RecordForm() {
     }
     try {
       if (fromTimer) {
+        // The draft is saved first, so a refused record loses nothing typed;
+        // the record itself is this body, not the draft.
+        await draftSaver.flush()
         await create.mutateAsync({ url: endpoints.timer.record(), body })
         navigate('/records')
         timers.clear()
@@ -167,8 +171,6 @@ export default function RecordForm() {
     invalidateResources(queryClient, INVALIDATE, { refetchType: 'none' })
     navigate('/records')
   }
-
-  const drills = exercise.data?.drills ?? []
 
   if (fromTimer && !pending) {
     if (timers.isPending) return <Loading />
@@ -205,8 +207,11 @@ export default function RecordForm() {
 
       {isNew || existing.data ? (
         <>
-          <Section title="時間地點">
-            <div className="space-y-3">
+          <RecordFields
+            form={form}
+            setForm={setForm}
+            defaults={defaults}
+            when={
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="日期">
                   <Input type="date" required value={form.date} onChange={set('date')} />
@@ -221,76 +226,8 @@ export default function RecordForm() {
                   />
                 </Field>
               </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-text-muted">地點</p>
-                <OptionPicker
-                  label="地點"
-                  options={locations.data}
-                  value={chosen(form.location_id, defaults.location_id)}
-                  onChange={setValue('location_id')}
-                />
-              </div>
-            </div>
-          </Section>
-
-          <Section title="練了什麼">
-            <ActivitySelect
-              exercises={exercises.data}
-              drills={drills}
-              exerciseId={form.exercise_id}
-              drillId={form.drill_id}
-              onChange={setActivity}
-              drillHint="可以只記練習項目。"
-            />
-          </Section>
-
-          <Section title="類型">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="類型">
-                <Select value={form.kind} onChange={set('kind')}>
-                  {RECORD_KINDS.map((kind) => (
-                    <option key={kind.value} value={kind.value}>
-                      {kind.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              {form.kind === TEST_KIND ? (
-                <Field label="測驗對象" hint="一個階段，或一整個等級。">
-                  <RoadmapSelect
-                    goals={goals.data}
-                    value={form.target}
-                    onChange={setValue('target')}
-                    levels
-                    placeholder="選擇階段或等級…"
-                  />
-                </Field>
-              ) : null}
-            </div>
-          </Section>
-
-          <Section title="方法">
-            <OptionPicker label="方法" options={methods.data} value={form.method_id} onChange={setValue('method_id')} />
-          </Section>
-
-          <Section title="工具">
-            <OptionPicker
-              label="工具"
-              options={tools.data}
-              value={chosen(form.tool_id, defaults.tool_id)}
-              onChange={setValue('tool_id')}
-            />
-          </Section>
-
-          <Section title="參考">
-            <ResourceRows rows={form.references} onChange={setValue('references')} noun="參考" />
-          </Section>
-
-          <Section title="筆記">
-            <Field label="筆記">
-              <TextArea rows={4} value={form.notes} onChange={set('notes')} />
-            </Field>
-          </Section>
+            }
+          />
 
           <FormActions
             saving={saving}

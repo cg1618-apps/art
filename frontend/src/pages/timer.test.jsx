@@ -1,9 +1,10 @@
 // The timer through the real routes, with fetch mocked and a fake server
-// holding one timer: the start form defaults by the day of the week and sends
-// a countdown with its drill; the live figure follows the server's clock, not
+// holding one timer: the start form opens on the stopwatch, and a countdown
+// defaults by the day of the week and sends its drill; the live figure follows the server's clock, not
 // the browser's; the tone plays once at zero and not on opening a page already
 // past it; 停止 opens the record form prefilled, whose save is
-// /api/timer/record; the chip in the top bar; 捨棄; a drill's 開始計時.
+// /api/timer/record; the record draft, adopted from the server and saved as
+// it is typed; the chip in the top bar; 捨棄; a drill's 開始計時.
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -33,6 +34,7 @@ const timer = (fields) => ({
   stopped_at: null,
   now: iso(SERVER_NOW),
   activity: { exercise: LINES, drill: DRILL_REF },
+  draft: null,
   ...fields,
 })
 
@@ -47,6 +49,10 @@ function respond(call) {
     if (server) return json({ detail: '已經有一個計時。' }, 409)
     server = timer({ ...call.body, id: 8, elapsed_seconds: 0, running_since: iso(SERVER_NOW), started_at: iso(SERVER_NOW) })
     return json(server, 201)
+  }
+  if (path === '/api/timer' && call.method === 'PATCH') {
+    server = { ...server, ...('draft' in call.body ? { draft: call.body.draft } : {}) }
+    return json(server)
   }
   if (path === '/api/timer' && call.method === 'DELETE') {
     server = null
@@ -109,12 +115,26 @@ afterEach(() => {
 })
 
 describe('the start form', () => {
-  it('defaults to 30 minutes at the weekend and sends a countdown with its drill', async () => {
+  it('opens on the stopwatch, and starting untouched sends a stopwatch with no target', async () => {
+    renderAt('/timer')
+    const modes = within(await screen.findByRole('group', { name: '模式' })).getAllByRole('button')
+    const pressed = modes.filter((button) => button.getAttribute('aria-pressed') === 'true')
+    expect(pressed.map((button) => button.textContent)).toEqual(['碼錶'])
+    expect(screen.queryByRole('spinbutton', { name: '分鐘' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '開始' }))
+    await waitFor(() => expect(writes('POST')).toHaveLength(1))
+    expect(writes('POST')[0].url).toBe('/api/timer')
+    expect(writes('POST')[0].body).toEqual({ mode: 'stopwatch' })
+  })
+
+  it('a countdown defaults to 30 minutes at the weekend and sends its drill', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 9, 3, 12, 0)) // a Saturday
     renderAt('/timer?drill=5')
 
-    const minutes = await screen.findByRole('spinbutton', { name: '分鐘' })
+    fireEvent.click(await screen.findByRole('button', { name: '倒數' }))
+    const minutes = screen.getByRole('spinbutton', { name: '分鐘' })
     expect(minutes.value).toBe('30')
     const pressed = within(screen.getByRole('group', { name: '預設' }))
       .getAllByRole('button')
@@ -132,12 +152,13 @@ describe('the start form', () => {
     expect(await screen.findByRole('timer', { name: '計時' })).toBeTruthy()
   })
 
-  it('defaults to 10 minutes on a weekday; a stopwatch sends no target', async () => {
+  it('a countdown defaults to 10 minutes on a weekday; the stopwatch sends no target', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 8, 30, 12, 0)) // a Wednesday
     renderAt('/timer?exercise=1')
 
-    expect((await screen.findByRole('spinbutton', { name: '分鐘' })).value).toBe('10')
+    fireEvent.click(await screen.findByRole('button', { name: '倒數' }))
+    expect(screen.getByRole('spinbutton', { name: '分鐘' }).value).toBe('10')
     fireEvent.click(screen.getByRole('button', { name: '碼錶' }))
     expect(screen.queryByRole('spinbutton', { name: '分鐘' })).toBeNull()
     await waitFor(() => expect(screen.getByRole('combobox', { name: '練習項目' }).value).toBe('1'))
@@ -257,6 +278,148 @@ describe('stopping', () => {
   })
 })
 
+describe('the record draft', () => {
+  const DRAFT = {
+    kind: 'piece',
+    method_id: null,
+    references: [{ name: '人體結構', url: 'https://example.com/anatomy' }],
+    notes: '肩膀太窄',
+  }
+  const STOPPED = { state: 'stopped', running_since: null, elapsed_seconds: 600, stopped_at: iso(SERVER_NOW) }
+  const notes = () => screen.getByRole('textbox', { name: '筆記' })
+  const patches = () => writes('PATCH')
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(SERVER_NOW)
+  })
+
+  it('opens with the server’s draft and the timer’s activity, and saves nothing for it', async () => {
+    server = timer({ draft: DRAFT })
+    renderAt('/timer')
+    await advance()
+    expect(screen.getByRole('heading', { name: '紀錄草稿' })).toBeTruthy()
+    expect(notes().value).toBe('肩膀太窄')
+    expect(screen.getByRole('combobox', { name: '類型' }).value).toBe('piece')
+    expect(screen.getByDisplayValue('https://example.com/anatomy')).toBeTruthy()
+    // The drill's option arrives with its exercise's page.
+    await advance(100)
+    const drill = screen.getAllByRole('combobox', { name: /練法/ })
+    expect(drill.map((select) => select.value)).toEqual(['5'])
+
+    await advance(2000)
+    expect(patches()).toHaveLength(0)
+  })
+
+  it('saves an edit once the typing stops, with the activity as a record sends it', async () => {
+    server = timer({})
+    renderAt('/timer')
+    await advance()
+
+    fireEvent.change(notes(), { target: { value: '線' } })
+    await advance(400)
+    fireEvent.change(notes(), { target: { value: '線條要穩' } })
+    await advance(400)
+    expect(patches()).toHaveLength(0)
+    expect(screen.getByText('儲存中…')).toBeTruthy()
+
+    await advance(500)
+    expect(patches()).toHaveLength(1)
+    expect(patches()[0]).toEqual({
+      url: '/api/timer',
+      method: 'PATCH',
+      body: {
+        drill_id: 5,
+        exercise_id: null,
+        draft: { kind: 'practice', stage_id: null, goal_id: null, method_id: null, references: [], notes: '線條要穩' },
+      },
+    })
+    // The location and tool were never chosen: left out, so their defaults still apply.
+    expect(patches()[0].body.draft).not.toHaveProperty('tool_id')
+    expect(screen.getByText('已儲存')).toBeTruthy()
+  })
+
+  it('keeps what is typed through the 30 s refetch', async () => {
+    server = timer({ draft: DRAFT })
+    renderAt('/timer')
+    await advance()
+    fireEvent.change(notes(), { target: { value: '本機的字' } })
+    // Another device writes a different draft meanwhile.
+    server = { ...server, draft: { notes: '別台的字' } }
+    const reads = () => calls.filter((call) => call.url === '/api/timer' && call.method === 'GET').length
+    const before = reads()
+    await advance(31_000)
+    expect(reads()).toBeGreaterThan(before)
+    expect(notes().value).toBe('本機的字')
+  })
+
+  it('停止 sends a waiting edit first, and the record form opens with it', async () => {
+    server = timer({})
+    renderAt('/timer')
+    await advance()
+    fireEvent.change(notes(), { target: { value: '停之前寫的' } })
+    fireEvent.click(screen.getByRole('button', { name: '停止' }))
+    await advance()
+
+    const order = calls.filter((call) => call.method !== 'GET').map((call) => `${call.method} ${call.url}`)
+    expect(order).toEqual(['PATCH /api/timer', 'POST /api/timer/stop'])
+    expect(currentLocation()).toBe('/records/new?from=timer')
+    expect(notes().value).toBe('停之前寫的')
+  })
+
+  it('捨棄 drops a waiting edit with the timer', async () => {
+    server = timer({})
+    renderAt('/timer')
+    await advance()
+    fireEvent.change(notes(), { target: { value: '不要了' } })
+    fireEvent.click(screen.getByRole('button', { name: '捨棄' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '捨棄' }))
+    await advance(2000)
+    expect(writes('DELETE')).toHaveLength(1)
+    expect(patches()).toHaveLength(0)
+  })
+
+  it('the record form keeps its edits on the timer, and /timer finds them', async () => {
+    server = timer({ ...STOPPED, draft: DRAFT })
+    renderAt('/records/new?from=timer')
+    await advance()
+    expect(notes().value).toBe('肩膀太窄')
+
+    fireEvent.change(notes(), { target: { value: '回頭再記' } })
+    // 取消 sends it at once rather than after the pause.
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    await advance()
+    expect(patches()).toHaveLength(1)
+    expect(patches()[0].body.draft).toMatchObject({ kind: 'piece', notes: '回頭再記' })
+    expect(currentLocation()).toBe('/timer')
+    expect(notes().value).toBe('回頭再記')
+  })
+
+  it('the record form’s save sends the record with the draft in it', async () => {
+    server = timer({ ...STOPPED, draft: DRAFT })
+    renderAt('/records/new?from=timer')
+    await advance()
+    await advance()
+    const save = screen.getByRole('button', { name: '儲存' })
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+    await advance()
+
+    const posted = writes('POST').filter((call) => call.url === '/api/timer/record')
+    expect(posted).toHaveLength(1)
+    expect(posted[0].body).toMatchObject({
+      kind: 'piece',
+      notes: '肩膀太窄',
+      references: [{ name: '人體結構', url: 'https://example.com/anatomy' }],
+      duration_minutes: 10,
+      drill_id: 5,
+    })
+    // Nothing was edited, so there was no draft to save first.
+    expect(patches()).toHaveLength(0)
+    expect(currentLocation()).toBe('/records')
+  })
+})
+
 describe('the top bar chip', () => {
   it('shows on every page while a timer exists, and pauses it', async () => {
     server = timer({ state: 'paused', running_since: null, elapsed_seconds: 138 })
@@ -297,15 +460,13 @@ describe('捨棄', () => {
 })
 
 describe('a drill’s 開始計時', () => {
-  it('starts the day’s countdown with the drill and goes to /timer', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date(2026, 9, 5, 12, 0)) // a Monday
+  it('starts a stopwatch with the drill and goes to /timer', async () => {
     renderAt('/exercises/1')
     fireEvent.click(await screen.findByRole('button', { name: '為「基本線條」開始計時' }))
     await waitFor(() => expect(currentLocation()).toBe('/timer'))
     expect(writes('POST')[0]).toMatchObject({
       url: '/api/timer',
-      body: { mode: 'countdown', target_seconds: 600, drill_id: 5 },
+      body: { mode: 'stopwatch', drill_id: 5 },
     })
   })
 
