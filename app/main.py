@@ -6,9 +6,20 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import logging_config
+from app import errors, logging_config
 from app.request_context import RequestIdMiddleware
-from app.routers import health
+from app.routers import (
+    drills,
+    exercises,
+    goals,
+    health,
+    notes,
+    options,
+    records,
+    references,
+    stages,
+    timer,
+)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DIST = BASE_DIR / "frontend_dist"
@@ -26,7 +37,18 @@ def create_app(dist: Path = DIST) -> FastAPI:
     # Added first, so it is the OUTERMOST middleware and the id is set before
     # anything below it can log.
     app.add_middleware(RequestIdMiddleware)
+    errors.install(app)
+
     app.include_router(health.router)
+    app.include_router(options.router)
+    app.include_router(notes.router)
+    app.include_router(goals.router)
+    app.include_router(stages.router)
+    app.include_router(exercises.router)
+    app.include_router(drills.router)
+    app.include_router(records.router)
+    app.include_router(timer.router)
+    app.include_router(references.router)
 
     if dist.is_dir():
         # Conditional: a bundle small enough for Vite to inline every asset
@@ -41,7 +63,7 @@ def create_app(dist: Path = DIST) -> FastAPI:
         def spa(full_path: str):
             """Every non-API path serves the bundle, so client routing works.
 
-            Registered AFTER the health router, which is what stops it
+            Registered AFTER the API routers, which is what stops it
             swallowing a REGISTERED route: had this route been added first, it
             would match /health before the health router ever got a turn.
 
@@ -56,10 +78,33 @@ def create_app(dist: Path = DIST) -> FastAPI:
             deploy pipeline probes it). Without the guard a mistyped probe -
             /healthz, /health/ready - would be answered by the SPA with a 200,
             and a health check that cannot fail is worse than none.
+
+            Past those two guards, a path that names a REAL FILE in the
+            bundle is served as that file. Vite copies frontend/public/ to
+            the root of the bundle rather than into assets/, and only
+            /assets is mounted as StaticFiles - so without this, /favicon.svg
+            came back as index.html under text/html and the browser discarded
+            it. Nothing sits in front of this app to cover the gap:
+            cloudflared connects straight to uvicorn.
+
+            `full_path` is user-controlled, so the candidate is resolved and
+            confined to the dist directory before it is served - otherwise
+            `..%2F.env` reads any file beside the bundle, the app's own
+            credentials included. This is media's resolve-and-confine block,
+            adopted rather than redesigned; docs/notes/decisions.md records
+            why it is that rather than a list of special-cased icon paths.
             """
             for prefix in ("api", "health"):
                 if full_path == prefix or full_path.startswith(f"{prefix}/"):
                     raise HTTPException(status_code=404)
+            dist_root = dist.resolve()
+            candidate = (dist_root / full_path).resolve()
+            if (
+                candidate != dist_root
+                and candidate.is_relative_to(dist_root)
+                and candidate.is_file()
+            ):
+                return FileResponse(candidate)
             return FileResponse(dist / "index.html")
 
     return app

@@ -1,21 +1,25 @@
-import { useEffect, useState } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter } from 'react-router-dom'
 
-function App() {
-  const [health, setHealth] = useState('loading...')
+import AppRoutes from './routes'
 
-  useEffect(() => {
-    fetch('/health')
-      .then((response) => response.json())
-      .then((data) => setHealth(data.status))
-      .catch(() => setHealth('unreachable'))
-  }, [])
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // One user: refetching on every window focus is noise, and the data
+      // changes when this person changes it.
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+})
 
+export default function App() {
   return (
-    <main>
-      <h1>art</h1>
-      <p>API health: {health}</p>
-    </main>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
-
-export default App

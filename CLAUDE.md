@@ -27,10 +27,13 @@ media tracker's by default.
 
 ## Status
 
-**The skeleton is built; no feature is.** FastAPI serves `/health` and the
-built SPA, Alembic's chain holds one empty baseline revision, and the deploy
-pipeline's hook, the production compose file and both workflows are in place.
-There is no schema and no module from the table in `docs/notes/decisions.md`.
+**Notes + Options, Goals + Roadmap, Record + Exercise, Timer and Reference
+are built** — modules 1, 2, 3, 5, 6 and 8 in `docs/notes/decisions.md`,
+"Structure"; Reference holds links only so far, and its other kinds wait for
+their own design pass. Schedule and Tool each wait for a design discussion
+with the owner first.
+The timer's shape is the deliberate divergence this file anticipated; its
+reasons are in `decisions.md`.
 
 Each module gets its own design pass immediately before it is built —
 brainstorm into `docs/superpowers/specs/`, then plan, then implement.
