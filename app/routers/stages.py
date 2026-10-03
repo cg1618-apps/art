@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import schemas
 from app.database import get_db
 from app.models import Stage
+from app.routers.common import goal_ref, resource_list
 from app.routers.goals import stage_summary_fields
 from app.services import stages
 
@@ -15,13 +16,9 @@ router = APIRouter(prefix="/api/stages", tags=["Stages"])
 def _response(db: Session, row: Stage) -> schemas.StageResponse:
     return schemas.StageResponse(
         **stage_summary_fields(row, stages.numbers(db)[row.id]),
-        goal=schemas.GoalRef(
-            id=row.goal.id, code=row.goal.code, display_name=row.goal.display_name
-        ),
+        goal=goal_ref(row.goal),
         remark=row.remark,
-        resources=[
-            schemas.ResourceResponse(id=r.id, name=r.name, url=r.url) for r in row.resources
-        ],
+        resources=resource_list(row.resources),
     )
 
 
@@ -42,6 +39,7 @@ def update_stage(stage_id: int, payload: schemas.StageUpdate, db: Session = Depe
 
 @router.delete("/{stage_id}", status_code=204)
 def delete_stage(stage_id: int, db: Session = Depends(get_db)):
-    """Its resources go with it."""
+    """Its resources go with it; its exercises stay, with no stage. 409
+    `{detail, records}` while test records name it."""
     stages.delete(db, stage_id)
     return Response(status_code=204)

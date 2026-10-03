@@ -4,8 +4,10 @@ Tier 2: a list lives here when no code branches on its exact value. Entities
 link to an option by id, never by copying its text, so a rename is one row and
 shows everywhere at once.
 
-What names an option - `note.category_id`, `note_topic.option_id` - gives way
-when it is deleted: single-valued references are set NULL, tag links cascade.
+What names an option gives way when it is deleted: single-valued references -
+`note.category_id`, `drill.source_id`, `record.location_id`, `.method_id`,
+`.tool_id` - are set NULL, and tag links - `note_topic`, `exercise_topic` -
+cascade.
 The API states how many before it deletes (`DELETE ...?in_use=n`).
 """
 

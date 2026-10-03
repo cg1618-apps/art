@@ -5,16 +5,11 @@ from sqlalchemy.orm import Session
 
 from app import schemas
 from app.database import get_db
-from app.models import Note, SystemOption
+from app.models import Note
+from app.routers.common import option_ref, resource_list
 from app.services import notes
 
 router = APIRouter(prefix="/api/notes", tags=["Notes"])
-
-
-def _ref(option: SystemOption | None) -> schemas.OptionRef | None:
-    if option is None:
-        return None
-    return schemas.OptionRef(id=option.id, value=option.value, description=option.description)
 
 
 def _summary_fields(row: Note) -> dict:
@@ -24,8 +19,8 @@ def _summary_fields(row: Note) -> dict:
         "name_cn": row.name_cn,
         "name_en": row.name_en,
         "name_alt": row.name_alt,
-        "category": _ref(row.category),
-        "topics": [_ref(t) for t in row.topics],
+        "category": option_ref(row.category),
+        "topics": [option_ref(t) for t in row.topics],
         "summary": row.summary,
         "visibility": row.visibility,
         "updated_at": row.updated_at,
@@ -42,9 +37,7 @@ def _response(row: Note) -> schemas.NoteResponse:
         aliases=sorted(alias.value for alias in row.aliases),
         body=row.body,
         remark=row.remark,
-        resources=[
-            schemas.ResourceResponse(id=r.id, name=r.name, url=r.url) for r in row.resources
-        ],
+        resources=resource_list(row.resources),
         created_at=row.created_at,
     )
 

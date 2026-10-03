@@ -100,7 +100,7 @@ class OptionResponse(BaseModel):
     description: str | None = None
     remark: str | None = None
     sort_order: int
-    # Notes whose category is this option, plus note_topic rows naming it.
+    # Every reference to this option: see `services.options.REFERENCES`.
     in_use: int = 0
 
 

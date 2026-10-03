@@ -35,3 +35,16 @@ def check_dated_status(row, sent: dict, *, done: str, date_field: str) -> None:
     stamped: date | None = merged(row, sent, date_field)
     if stamped is not None and merged(row, sent, "status") != done:
         raise AppError(422, f"{date_field} is set only when the status is {done}.")
+
+
+def apply_aliases(owner, alias_model, values: list[str]) -> None:
+    """Reconcile `owner.aliases` with `values`, by value.
+
+    A kept alias keeps its row, so a save that changes nothing deletes and
+    re-inserts nothing (and cannot trip `uq_<table>_alias` against the row it
+    is replacing). Shared by every row with an `<table>_alias` table.
+    """
+    wanted = list(dict.fromkeys(values))
+    owner.aliases = [row for row in owner.aliases if row.value in wanted]
+    kept = {row.value for row in owner.aliases}
+    owner.aliases.extend(alias_model(value=v) for v in wanted if v not in kept)

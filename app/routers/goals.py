@@ -73,6 +73,7 @@ def update_goal(goal_id: int, payload: schemas.GoalUpdate, db: Session = Depends
 
 @router.delete("/{goal_id}", status_code=204)
 def delete_goal(goal_id: int, db: Session = Depends(get_db)):
-    """409 `{detail, stages: n}` while the goal still has stages."""
+    """409 `{detail, stages: n}` while the goal still has stages, and
+    `{detail, records: n}` while test records name it."""
     goals.delete(db, goal_id)
     return Response(status_code=204)

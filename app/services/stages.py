@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.constants import StageStatus
 from app.errors import AppError
-from app.models import Goal, Stage, StageResource
+from app.models import Goal, Record, Stage, StageResource
 from app.schemas.goal import STAGE_NEEDS_A_NAME
-from app.services import resources
+from app.services import records, resources
 from app.services.common import check_dated_status, require_a_name
 
 
@@ -95,6 +95,10 @@ def update(db: Session, stage_id: int, payload) -> Stage:
 
 
 def delete(db: Session, stage_id: int) -> None:
-    """Its resources cascade."""
-    db.delete(get(db, stage_id))
+    """Refused while records name the stage as the one whose test they are:
+    409 `{detail, records}`. Its resources cascade; exercises in the stage
+    are kept, with no stage (`exercise.stage_id` is SET NULL)."""
+    stage = get(db, stage_id)
+    records.refuse_if_named(db, "stage", Record.stage_id == stage.id)
+    db.delete(stage)
     db.commit()
