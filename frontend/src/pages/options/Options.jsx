@@ -336,11 +336,11 @@ export default function Options() {
         >
           {deleting.count ? (
             <p>
-              有 <strong className="tabular-nums">{deleting.count}</strong> 則筆記用到它。刪除後，
-              它會從這些筆記拿掉：用作主題的會少一個主題，用作分類的會變成沒有分類。
+              有 <strong className="tabular-nums">{deleting.count}</strong> 處用到它。刪除後，
+              用作標籤的會少一個標籤，單選的欄位（分類、來源、地點、方法、工具）會變成空白。
             </p>
           ) : (
-            <p>沒有筆記用到它。刪除後就找不回來了。</p>
+            <p>沒有任何地方用到它。刪除後就找不回來了。</p>
           )}
         </DeleteDialog>
       ) : null}
