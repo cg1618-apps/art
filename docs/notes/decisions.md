@@ -93,29 +93,52 @@ unguarded handler.
 
 ## Structure
 
-Eight modules, built in this order. Each gets its own design pass immediately
-before it is built, not now.
+Eleven modules, built in this order. Each gets its own design pass
+immediately before it is built, not now. Modules 1 to 8 are the first build
+block; the rest wait until it is done.
 
 | | Module | Owns | Depends on |
 | --- | --- | --- | --- |
-| 1 | Records | what was drawn or practised, when, for how long, notes | — |
-| 2 | Timer | stopwatch and countdown; produces or updates a record | 1 |
-| 3 | Artists | who is worth following, links, what to take from them | — |
-| 4 | Tools | notes on materials and software | — |
-| 5 | References | reference images and links, tagged | — |
-| 6 | Roadmap | skills and targets, with status | 1 |
-| 7 | Schedule | when to practise | 1 |
-| 8 | Works | finished pieces, with images | 1 |
+| 1 | Notes + Options | knowledge not tied to one thing (terms, tips, advice); the open vocabularies every module reads | — |
+| 2 | Goals | the levels: L0 Foundations, L1 Figure, L2 Character, L3 Scene, L4 Colour, L5 Illustration | — |
+| 3 | Roadmap | the stages of each level, and the test that closes each | 2 |
+| 4 | Schedule | when to practise what | 3 |
+| 5 | Record + Exercise | exercises (練習項目) and drills (練法); what was practised, when, for how long | 3 |
+| 6 | Timer | stopwatch and countdown; produces a record | 5 |
+| 7 | Tool | notes on materials and software | — |
+| 8 | Reference | reference images and links, tagged | — |
+| 9 | Plan to draw | what to draw next | 8 |
+| 10 | Artist | who is worth following, links, what to take from them | — |
+| 11 | Works | finished pieces, with images | 5 |
+
+Roadmap, Schedule, Record + Exercise and Timer matter most. The order changed
+once, before anything was built: Records was first, and Notes + Options went
+ahead of it because every later module reads system options, and the page that
+manages them costs little more alongside the first module that uses them.
+Goals and Roadmap went ahead of Records because how to record and what an
+exercise is cannot be decided before what the practice is for.
 
 ### Entities
 
-- **Record** — date, a `kind` (practice, work, study), a **nullable** duration,
-  notes, and an optional link to a work.
+As agreed before any of them was designed in detail; each module's design pass
+settles the rest.
+
+- **Note** — built; see `docs/data-model.md`.
+- **Exercise** (練習項目) and **Drill** (練法) — `food`'s dish and recipe. An
+  exercise is what is practised (gesture drawing, box in perspective) and sits
+  on a roadmap stage; a drill is one prescribed way of doing it (Line of
+  Action 30s × 20), with its source, source links, resources, instructions,
+  unit, target, suggested minutes and frequency. Both carry a remark and
+  name–link resources.
+- **Record** — one record per exercise practised: date, location, an optional
+  duration in minutes, a drill **or** an exercise **or** neither (never both:
+  the exercise is read through the drill), a `kind` (practice, piece, test), a
+  method, a tool, name–link reference links, notes. Images are designed later
+  (Google Drive or Google Photos).
 - **Work** — names, images, status, and the `visibility` field every shareable
   entity here carries.
 - **Reference** — an image or a link, plus tags.
 - **Artist** — names, links, notes on what is worth learning from them.
-- **ToolNote**, **RoadmapItem**, **ScheduledPractice** — text, tags, status.
 
 ### The decisions behind that shape
 
@@ -132,10 +155,12 @@ before it is built, not now.
   actually want to do is a reason the app stops being opened.
 - **Expressions and accessories are tags on references, not libraries of their
   own.** They are the same kind of thing, and three tables would mean three
-  near-identical screens to build and maintain.
+  near-identical screens to build and maintain. Tags are system options, so a
+  library is one option category.
 - **Works come last, and sharing comes with them.** Nothing is shareable until
   there are finished pieces to share, so the `/s/...` prefix and the
-  `visibility` field stay reserved and unused until module 8. They are still
+  `visibility` field stay reserved and unused until Works. `note` already
+carries the field, from its first migration, for the same reason. They are still
   designed in from the start, because retrofitting visibility checks across
   every read path is the expensive half.
 
@@ -154,8 +179,9 @@ which the APIs can supply again, from `static/library`, which nothing can.
 
 ### Naming
 
-`name_cn`, `name_en`, `aliases[]`, with `name_cn` as the display default — the
-platform-wide convention, shared with `food` and `travel`.
+`name_cn`, `name_en` and `name_alt`, at least one required, with `name_cn` as
+the display default, and the aliases in a child table that is searched and
+never displayed — `food`'s dish shape, which `note` follows exactly.
 
 ### Out of scope, deliberately
 
@@ -214,3 +240,55 @@ What this did **not** test is the refusal: a revision marked
 reversing one. That stays covered by the hook's own tests. Nor did it test the
 data restore, which is deliberately manual - `bin/rollback` reverses the
 schema and says, in capitals, that the data was not restored.
+
+## Options follow `media`'s tiers, with four divergences
+
+Tags and every other open vocabulary are `system_option` rows, `media`'s Tier
+2, decided by `media`'s question: does code branch on the exact value? The
+lighter alternative, `travel`'s `label_option` (suggested values stored as
+text), was rejected because a rename there has to rewrite every row that
+copied the text, and the owner asked for system options by name.
+
+Where art departs from `media`, deliberately:
+
+- **Integer ids**, not a UUID `system_id`. art's skeleton is `travel`'s, and
+  every table in `travel` and `food` uses integers.
+- **`description` beside `remark`.** `media`'s `remark` is an admin note shown
+  read-only on one page. A description is written for the moment a value is
+  picked, and every picker shows it: two audiences, two columns.
+- **Categories are registered in code** (`OPTION_CATEGORIES`), not free text on
+  the API. Every category is read by some field, so an unregistered one is a
+  typo, and each needs a label and a description of its own for the Options
+  page.
+- **A delete in use states its cost and is checked.** `media` deletes silently
+  and cascades the tags away. Here the page shows the count, the request
+  echoes it, and a stale count is a 409 - `food`'s `StaleCountError`.
+
+No scope, usage or alias tables: they answer questions `media` has (which media
+type, which source field, which external API string) that art does not.
+
+## Notes are one table, filed by an option
+
+Terms, knowledge, tips and advice are one `note` table with a `note_category`
+option, not four tables or a code enum: nothing behaves differently for a 名詞
+than for a 小技巧, so the category files a note and nothing more, and a new
+category is a row. The glossary is Notes filtered to 名詞. A note's `summary`
+is its definition when it is a term.
+
+Search covers names, aliases and the summary, and not the body: a word inside
+a long note would bury the note you meant.
+
+Notes about one tool belong to the Tool module and a record's notes to the
+record; Notes holds what is tied to neither.
+
+## The frontend foundation is `food`'s
+
+There was no frontend before this module, so one had to be chosen. It is
+`food`'s: one `client.js` that calls `fetch`, `endpoints.js`, `useApiQuery` /
+`useApiMutation` over TanStack Query, `useUrlFilters`, react-router 7,
+Tailwind 4 with `food`'s tokens, Vitest. `media`'s Options page uses raw
+`fetch` in `useEffect` and react-router 6, the older shape of the same ideas.
+
+Markdown is `media`'s `ResourceMarkdown` configuration, because `food` has no
+renderer: `react-markdown` and `remark-gfm`, no raw HTML, `javascript:` links
+inert.
