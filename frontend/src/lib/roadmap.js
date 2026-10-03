@@ -1,0 +1,71 @@
+// Frontend: the roadmap's statuses and their words, and the two things the
+// roadmap derives from its goals.
+//
+// The values are the backend's `GoalStatus` and `StageStatus` enums
+// (app/constants.py). Status is set by hand: nothing here derives a goal's
+// status from its stages.
+//
+// Each status carries the Chip tone it is drawn in (components/ui/primitives):
+// `brand` for what is being worked on now, `ok` for done, `neutral` for not yet.
+
+export const GOAL_STATUSES = [
+  { value: 'planned', label: '計畫中', tone: 'neutral' },
+  { value: 'active', label: '進行中', tone: 'brand' },
+  { value: 'achieved', label: '已達成', tone: 'ok' },
+]
+
+export const STAGE_STATUSES = [
+  { value: 'not_started', label: '未開始', tone: 'neutral' },
+  { value: 'in_progress', label: '進行中', tone: 'brand' },
+  { value: 'passed', label: '已通過', tone: 'ok' },
+]
+
+export const DEFAULT_GOAL_STATUS = 'planned'
+export const DEFAULT_STAGE_STATUS = 'not_started'
+
+// The status that carries a date: `achieved_on` / `passed_on` is set only
+// with it, and the server clears the date when the status moves away.
+export const GOAL_DONE = 'achieved'
+export const STAGE_DONE = 'passed'
+
+function find(list, value) {
+  return list.find((entry) => entry.value === value)
+}
+
+/** The word for a goal status, or the value itself. */
+export function goalStatusLabel(value) {
+  return find(GOAL_STATUSES, value)?.label ?? value
+}
+
+/** The word for a stage status, or the value itself. */
+export function stageStatusLabel(value) {
+  return find(STAGE_STATUSES, value)?.label ?? value
+}
+
+export function goalStatusTone(value) {
+  return find(GOAL_STATUSES, value)?.tone ?? 'neutral'
+}
+
+export function stageStatusTone(value) {
+  return find(STAGE_STATUSES, value)?.tone ?? 'neutral'
+}
+
+/**
+ * The current stage's id: the first stage, across every goal in order, that
+ * is not passed - or null when every stage is. `goals` is GET /api/goals,
+ * already in roadmap order with each goal's stages in theirs.
+ */
+export function currentStageId(goals) {
+  for (const goal of goals ?? []) {
+    for (const stage of goal.stages ?? []) {
+      if (stage.status !== STAGE_DONE) return stage.id
+    }
+  }
+  return null
+}
+
+/** Today in the browser's own time zone, as the API's YYYY-MM-DD. */
+export function localToday(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
