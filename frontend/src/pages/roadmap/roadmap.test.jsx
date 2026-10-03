@@ -1,5 +1,5 @@
 // The roadmap pages through the real routes, with fetch mocked: the roadmap
-// draws every goal and its stages and marks the current stage; a status
+// draws every goal and its stages and highlights what is in progress; a status
 // change and a move send the PATCH bodies; the goal form shows the server's
 // 409 when a goal with stages is deleted; the stage form and page, with the
 // stage's exercises and test records.
@@ -23,8 +23,9 @@ const stage = (fields) => ({
   display_name: fields.name_cn,
 })
 
-// The first goal's first stage is passed, so the current stage is the
-// SECOND row - a first-row highlight would not pass for the right reason.
+// In progress: L0's THIRD stage and L1's stage, while L0's second is not
+// started - so "the first stage not passed" (the old rule) would mark the
+// wrong row, and two marks in two levels show nothing assumes one at a time.
 const GOALS = [
   {
     id: 1,
@@ -42,7 +43,7 @@ const GOALS = [
     stages: [
       stage({ id: 10, number: 0, position: 0, name_cn: '設定', status: 'passed', passed_on: '2026-10-01' }),
       stage({ id: 11, number: 1, position: 1, name_cn: '線條與形狀', test: '一頁穩定的線條。' }),
-      stage({ id: 12, number: 2, position: 2, name_cn: '空間中的形體' }),
+      stage({ id: 12, number: 2, position: 2, name_cn: '空間中的形體', status: 'in_progress' }),
     ],
   },
   {
@@ -58,7 +59,7 @@ const GOALS = [
     status: 'planned',
     achieved_on: null,
     remark: null,
-    stages: [stage({ id: 20, number: 3, position: 0, name_cn: '比例' })],
+    stages: [stage({ id: 20, number: 3, position: 0, name_cn: '比例', status: 'in_progress' })],
   },
 ]
 
@@ -156,7 +157,7 @@ describe('routing', () => {
     expect(location()).toBe('/roadmap')
     const nav = screen.getAllByRole('navigation', { name: '主要' })[0]
     const links = within(nav).getAllByRole('link').map((link) => link.textContent)
-    expect(links.slice(1)).toEqual(['路線圖', '練習', '紀錄', '計時', '筆記', '選項'])
+    expect(links.slice(1)).toEqual(['路線圖', '練習', '練法', '紀錄', '計時', '筆記', '選項'])
   })
 })
 
@@ -174,13 +175,22 @@ describe('the roadmap', () => {
     expect(within(rows[1]).getByRole('link', { name: '線條與形狀' }).getAttribute('href')).toBe('/roadmap/stages/11')
     expect(rows[1].textContent).toContain('一頁穩定的線條。')
 
-    // The mark is on the second row, and on no other row on the page.
-    expect(rows[1].getAttribute('aria-current')).toBe('step')
-    const marked = document.querySelectorAll('[aria-current="step"]')
-    expect(marked).toHaveLength(1)
-    expect(rows[0].getAttribute('aria-current')).toBeNull()
-
+    // Marked: the stages in progress and the active level - nothing else.
+    expect(rows.map((row) => row.hasAttribute('data-in-progress'))).toEqual([false, false, true])
     const l1 = screen.getByRole('region', { name: '人體' })
+    const l1Rows = within(within(l1).getByRole('list', { name: '人體的階段' })).getAllByRole('listitem')
+    expect(l1Rows[0].hasAttribute('data-in-progress')).toBe(true)
+    expect(document.querySelectorAll('li[data-in-progress]')).toHaveLength(2)
+    expect(l0.hasAttribute('data-in-progress')).toBe(true)
+    expect(l1.hasAttribute('data-in-progress')).toBe(false)
+
+    // And listed at the top, in roadmap order, as links to the stages.
+    const top = screen.getByRole('region', { name: '進行中' })
+    expect(within(top).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/roadmap/stages/12',
+      '/roadmap/stages/20',
+    ])
+
     expect(within(l1).getByText('計畫中')).toBeTruthy()
     expect(within(l1).getByRole('link', { name: /新增階段/ }).getAttribute('href')).toBe('/roadmap/stages/new?goal=2')
   })

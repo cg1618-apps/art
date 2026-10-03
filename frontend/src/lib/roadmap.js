@@ -1,5 +1,5 @@
-// Frontend: the roadmap's statuses and their words, and the two things the
-// roadmap derives from its goals.
+// Frontend: the roadmap's statuses and their words, and what the roadmap
+// derives from its goals.
 //
 // The values are the backend's `GoalStatus` and `StageStatus` enums
 // (app/constants.py). Status is set by hand: nothing here derives a goal's
@@ -28,6 +28,11 @@ export const DEFAULT_STAGE_STATUS = 'not_started'
 export const GOAL_DONE = 'achieved'
 export const STAGE_DONE = 'passed'
 
+// What is being worked on now. Any number of stages and levels may be at
+// once, anywhere on the roadmap: the owner does not work top to bottom.
+export const GOAL_ACTIVE = 'active'
+export const STAGE_ACTIVE = 'in_progress'
+
 function find(list, value) {
   return list.find((entry) => entry.value === value)
 }
@@ -51,17 +56,13 @@ export function stageStatusTone(value) {
 }
 
 /**
- * The current stage's id: the first stage, across every goal in order, that
- * is not passed - or null when every stage is. `goals` is GET /api/goals,
- * already in roadmap order with each goal's stages in theirs.
+ * Every stage in progress as { goal, stage }, in roadmap order. `goals` is
+ * GET /api/goals, already in that order with each goal's stages in theirs.
  */
-export function currentStageId(goals) {
-  for (const goal of goals ?? []) {
-    for (const stage of goal.stages ?? []) {
-      if (stage.status !== STAGE_DONE) return stage.id
-    }
-  }
-  return null
+export function inProgressStages(goals) {
+  return (goals ?? []).flatMap((goal) =>
+    (goal.stages ?? []).filter((stage) => stage.status === STAGE_ACTIVE).map((stage) => ({ goal, stage })),
+  )
 }
 
 /** Today in the browser's own time zone, as the API's YYYY-MM-DD. */
