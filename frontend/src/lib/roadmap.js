@@ -69,3 +69,21 @@ export function localToday(now = new Date()) {
   const pad = (n) => String(n).padStart(2, '0')
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
+
+/**
+ * One stage or one level, chosen in a single select (components/forms/
+ * RoadmapSelect): encoded `stage:<id>` / `goal:<id>`, so a test record's
+ * "exactly one of the two" is the shape of the control.
+ */
+export function targetValue(kind, id) {
+  return `${kind}:${id}`
+}
+
+/** A `stage:<id>` / `goal:<id>` choice as { stage_id, goal_id }; '' is neither. */
+export function parseTarget(value) {
+  const match = /^(stage|goal):(\d+)$/.exec(value ?? '')
+  return {
+    stage_id: match?.[1] === 'stage' ? Number(match[2]) : null,
+    goal_id: match?.[1] === 'goal' ? Number(match[2]) : null,
+  }
+}
