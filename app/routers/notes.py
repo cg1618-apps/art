@@ -15,10 +15,7 @@ router = APIRouter(prefix="/api/notes", tags=["Notes"])
 def _summary_fields(row: Note) -> dict:
     return {
         "id": row.id,
-        "display_name": row.display_name,
-        "name_cn": row.name_cn,
-        "name_en": row.name_en,
-        "name_alt": row.name_alt,
+        "name": row.name,
         "category": option_ref(row.category),
         "topics": [option_ref(t) for t in row.topics],
         "summary": row.summary,
@@ -34,7 +31,6 @@ def _summary(row: Note) -> schemas.NoteSummary:
 def _response(row: Note) -> schemas.NoteResponse:
     return schemas.NoteResponse(
         **_summary_fields(row),
-        aliases=sorted(alias.value for alias in row.aliases),
         body=row.body,
         remark=row.remark,
         resources=resource_list(row.resources),
@@ -44,12 +40,12 @@ def _response(row: Note) -> schemas.NoteResponse:
 
 @router.get("", response_model=list[schemas.NoteSummary])
 def list_notes(
-    q: str | None = Query(default=None, description="Matches a name, an alias or the summary"),
+    q: str | None = Query(default=None, description="Matches the name, the summary or the body"),
     category_id: list[int] | None = Query(None),
     topic_id: list[int] | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    """The library: a bare array sorted by display name. A repeated parameter
+    """The library: a bare array sorted by name. A repeated parameter
     means "any of" its values."""
     return [_summary(row) for row in notes.search(db, q, category_id, topic_id)]
 
