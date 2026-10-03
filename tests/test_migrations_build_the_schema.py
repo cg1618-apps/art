@@ -15,6 +15,14 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
+from alembic.autogenerate import compare_metadata
+from alembic.migration import MigrationContext
+
+# `models` is imported for its side effect of registering every table on
+# Base.metadata. Without it the comparisons below run against an empty
+# metadata and pass vacuously - or pass only because some other test module
+# happened to import the models first.
+from app import models  # noqa: F401
 from app.config import settings
 from app.database import Base
 
@@ -92,9 +100,8 @@ def test_upgrade_head_runs_against_an_empty_database(scratch_database):
         stamped = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
         assert stamped == head_revision()
 
-        # Vacuous while there are no models, and deliberately so: it starts
-        # biting the moment the first table is declared, which is when a
-        # revision that forgets a table would otherwise ship.
+        # Bites from 0002_notes_and_options onwards: a revision that declares
+        # a model without creating its table fails here.
         tables = set(inspect(conn).get_table_names())
         assert tables >= set(Base.metadata.tables), set(Base.metadata.tables) - tables
     engine.dispose()
@@ -114,3 +121,99 @@ def test_there_is_exactly_one_head():
     # Alembic's, so this is not much of a cross-check - but asserting a
     # literal id here is what made every future migration fail this test.
     assert head_revision() in lines[0], result.stdout
+
+
+def _upgrade(database_url: str, target: str = "head") -> None:
+    env = dict(os.environ)
+    env["DATABASE_URL"] = database_url
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", target],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def _downgrade(database_url: str, target: str) -> None:
+    env = dict(os.environ)
+    env["DATABASE_URL"] = database_url
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", target],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_the_migrated_schema_matches_the_models(scratch_database):
+    """The migration and the models must describe the same database.
+
+    The two are written by hand and separately - a migration may not import
+    from `app.models` - so nothing but this makes them agree. The table-name
+    check above passes a forgotten index, column or foreign key straight
+    through; `tests/api/conftest.py` builds with `create_all` and never runs
+    the migration at all. `food`'s test, adopted.
+    """
+    _upgrade(scratch_database)
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        differences = compare_metadata(MigrationContext.configure(conn), Base.metadata)
+    engine.dispose()
+
+    assert differences == [], differences
+
+
+def test_the_option_values_are_seeded_in_order(scratch_database):
+    """`create_all` seeds nothing, so the API tests cannot see the seed; this
+    is the only test that does. Method descriptions are compared verbatim."""
+    _upgrade(scratch_database)
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT category, value, description, sort_order FROM system_option"
+                " ORDER BY category, sort_order"
+            )
+        ).all()
+    engine.dispose()
+
+    by_category: dict[str, list] = {}
+    for category, value, description, sort_order in rows:
+        by_category.setdefault(category, []).append((value, description, sort_order))
+
+    assert [v for v, _, _ in by_category["note_category"]] == ["名詞", "知識", "小技巧", "建議"]
+    assert [v for v, _, _ in by_category["topic"]] == [
+        "線條", "形狀", "透視", "比例", "人體", "動態", "構圖", "光影", "色彩", "特效",
+    ]
+    assert [(v, d) for v, d, _ in by_category["method"]] == [
+        ("臨摹", "直接在參考圖上方描繪，盡量完整還原。（很少使用）"),
+        ("重現", "不疊在參考圖上，看著參考圖盡量完整還原整張圖，例如動畫截圖。屬於描寫的一種。"),
+        ("描寫", "看著參考圖畫，不疊在參考圖上。不要求完整還原。"),
+        ("速寫", "限時快速畫，抓動態和大形，不追求細節。"),
+        ("同人創作", "以既有角色或作品為題材的創作：構圖和姿勢是自己的，對象是別人的。"),
+        ("原創創作", "原創題材，例如自己的原創角色。可以使用參考資料。"),
+        ("隨便畫", "沒有特定目標，想畫什麼就畫什麼。"),
+    ]
+    for values in by_category.values():
+        assert [s for _, _, s in values] == list(range(len(values)))
+
+
+def test_notes_and_options_downgrade_and_upgrade_again(scratch_database):
+    """The downgrade drops everything it created, so the platform's rollback
+    can take it back and a later deploy can bring it forward again."""
+    _upgrade(scratch_database)
+    _downgrade(scratch_database, "0001_baseline")
+
+    engine = create_engine(scratch_database)
+    with engine.connect() as conn:
+        tables = set(inspect(conn).get_table_names()) - {"alembic_version"}
+    engine.dispose()
+    assert tables == set(), tables
+
+    _upgrade(scratch_database)
