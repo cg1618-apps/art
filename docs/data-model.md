@@ -10,6 +10,9 @@ the chain builds from zero and matches the models.
 
 ## Tables
 
+- [`exercise`](#exercise) — what is practised (練習項目)
+- [`drill`](#drill) — one prescribed way of practising an exercise (練法)
+- [`record`](#record) — one time something was practised
 - [`goal`](#goal) — a level of the roadmap, L0 to L5
 - [`stage`](#stage) — one stage of a level, with its test
 - [`stage_resource`](#stage_resource) — the links kept with a stage
@@ -28,6 +31,12 @@ flowchart TD
     O -->|option_id, CASCADE| T
     G["goal"] -->|goal_id, RESTRICT| S["stage"]
     S -->|stage_id, CASCADE| SR["stage_resource"]
+    S -->|stage_id, SET NULL| E["exercise"]
+    E -->|exercise_id, RESTRICT| D["drill"]
+    D -->|drill_id, RESTRICT| RC["record"]
+    E -->|exercise_id, RESTRICT| RC
+    S -->|stage_id, RESTRICT| RC
+    G -->|goal_id, RESTRICT| RC
 ```
 
 **What a note owns cascades with it; what it names gives way.** Aliases,
@@ -38,6 +47,73 @@ keeping without them.
 Every table carries `created_at` and `updated_at` except the link and child
 tables; both are `timestamptz` defaulted by the database clock
 (`TimestampMixin`, `app/models/base.py`).
+
+## `exercise`
+
+What is practised: gesture drawing, boxes in perspective, the head. `food`'s
+dish to the drill's recipe.
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | |
+| `name_cn`, `name_en`, `name_alt` | text | yes | At least one (`ck_exercise_has_a_name`) |
+| `stage_id` | integer | yes | → `stage`, `ON DELETE SET NULL`, indexed. Empty for what is practised at every level (gesture, character pieces) |
+| `description` | text | yes | Searched |
+| `remark` | text | yes | |
+
+Children, each the shape of its `note_` counterpart: `exercise_alias`,
+`exercise_resource` and `exercise_topic` (`topic` options only).
+
+**An exercise with drills, or named by records, cannot be deleted**; the API
+says how many of each are in the way.
+
+## `drill`
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | |
+| `exercise_id` | integer | no | → `exercise`, `RESTRICT`, indexed |
+| `name` | text | yes | `display_name` falls back to the exercise's |
+| `source_id` | integer | yes | → `system_option`, `SET NULL`, indexed. A `source` option |
+| `instructions` | text | yes | Markdown |
+| `unit` | text | yes | 頁, 張, 組, 個 |
+| `target` | integer | yes | Units in one round; ≥ 1 |
+| `suggested_minutes` | integer | yes | ≥ 1 |
+| `frequency` | text | yes | As the course words it: `daily for 3 weeks`, 每天 |
+| `remark` | text | yes | |
+| `position` | integer | no | Order inside its exercise |
+
+Children: `drill_source_link` (the course lectures) and `drill_resource`, both
+the `note_resource` shape.
+
+## `record`
+
+One time one exercise was practised. **The record is the spine**: nothing
+here demands a timer, a drill or a stage before a record can be written.
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | integer | no | | |
+| `date` | date | no | | Indexed |
+| `location_id` | integer | yes | | → option, `SET NULL`. A `location` option |
+| `duration_minutes` | integer | yes | | ≥ 0. Empty when nobody timed it |
+| `drill_id` | integer | yes | | → `drill`, `RESTRICT`, indexed |
+| `exercise_id` | integer | yes | | → `exercise`, `RESTRICT`, indexed |
+| `kind` | text | no | `practice` | `practice`, `piece`, `test` (`ck_record_kind`) |
+| `stage_id` | integer | yes | | → `stage`, `RESTRICT`, indexed. The stage whose test this is |
+| `goal_id` | integer | yes | | → `goal`, `RESTRICT`, indexed. The level whose test this is |
+| `method_id`, `tool_id` | integer | yes | | → option, `SET NULL`, indexed |
+| `notes` | text | yes | | |
+
+- **`ck_record_one_activity`**: a drill, an exercise, or neither — never both.
+  Through a drill, the exercise is derived.
+- **`ck_record_test_target`**: a `test` record names exactly one of a stage and
+  a goal; any other kind names neither.
+- **Records restrict what they name.** A record is history: deleting the drill,
+  exercise, stage or goal it names is refused with the count.
+
+Child: `record_reference`, the `note_resource` shape — the references drawn
+from.
 
 ## `goal`
 
@@ -163,3 +239,14 @@ A save reconciles the list by value, so an unchanged alias keeps its row.
 | `option_id` | integer | no | → `system_option`, `CASCADE`; part of the PK; `ix_note_topic_option` |
 
 `topic` options only. Returned ordered by the option's `sort_order`.
+
+## The exercise seed
+
+Migration `0004_exercises_and_records` writes 24 exercises and 57 drills from
+the owner's own notes (細節指示) and the assignment list of the three Udemy
+courses they finished: each drill's source, suggested minutes and frequency as
+the course gives them, a range taking its lower bound in `suggested_minutes`.
+Exercises find their stage by goal code and the stage's seeded name; one the
+owner has renamed leaves the exercise without a stage rather than failing.
+It also adds the `source`, `location` and `tool` options. Idempotent; the seed,
+not the truth.
