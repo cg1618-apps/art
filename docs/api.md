@@ -67,6 +67,12 @@ created_at }`.
 source, source_links, resources, instructions, unit, target,
 suggested_minutes, frequency, remark, position, created_at, updated_at }`.
 
+`DrillSummary`: `{ id, display_name, name, exercise: { id, display_name },
+stage, topics, source, unit, target, suggested_minutes, frequency,
+record_count, total_minutes, updated_at }`. `stage` and `topics` are the
+exercise's — a drill has neither of its own — and the counts are only the
+records naming the drill itself.
+
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
 | GET | `/api/exercises` | `?q=&stage_id=&topic_id=&no_stage=true` | summaries by stage number, unstaged last, then name. `q` searches names, aliases and the description |
@@ -74,6 +80,7 @@ suggested_minutes, frequency, remark, position, created_at, updated_at }`.
 | POST | `/api/exercises` | `{ name_cn?, name_en?, name_alt?, aliases?, stage_id?, topic_ids?, description?, remark?, resources? }` | 201 |
 | PATCH | `/api/exercises/{id}` | the same fields | |
 | DELETE | `/api/exercises/{id}` | | 204; 409 `{ detail, drills, records }` while either is non-zero |
+| GET | `/api/drills` | `?q=&exercise_id=&stage_id=&no_stage=&topic_id=&source_id=` | `DrillSummary[]` in the roadmap order of their exercises (as `/api/exercises`), then by position. `q` matches the drill's name or instructions, or a name or alias of its exercise; `stage_id` and `topic_id` are the exercise's |
 | GET | `/api/drills/{id}` | | `DrillResponse` |
 | POST | `/api/drills` | `{ exercise_id, name?, source_id?, instructions?, unit?, target?, suggested_minutes?, frequency?, remark?, position?, source_links?, resources? }` | 201 |
 | PATCH | `/api/drills/{id}` | the same fields | |
@@ -108,7 +115,7 @@ test.
 ## Timer
 
 `TimerResponse`: `{ id, mode, target_seconds, state, started_at,
-running_since, elapsed_seconds, stopped_at, now, activity }`. `state` is
+running_since, elapsed_seconds, stopped_at, now, activity, draft }`. `state` is
 `running`, `paused` or `stopped`; `now` is the database clock when the response
 was read, so a browser computes the live figure as `elapsed_seconds + (now −
 running_since)` against its own clock offset by `now`.
@@ -117,7 +124,7 @@ running_since)` against its own clock offset by `now`.
 | --- | --- | --- | --- |
 | GET | `/api/timer` | | the timer, or `null` |
 | POST | `/api/timer` | `{ mode, target_seconds?, drill_id?, exercise_id? }` | 201, running. 409 while any timer exists, a stopped one included |
-| PATCH | `/api/timer` | `{ target_seconds?, drill_id?, exercise_id? }` | `mode` cannot change |
+| PATCH | `/api/timer` | `{ target_seconds?, drill_id?, exercise_id?, draft? }` | in any state, stopped included. `mode` cannot change. A sent `draft` replaces the one held; `null` clears it |
 | POST | `/api/timer/pause` | | 409 unless running |
 | POST | `/api/timer/resume` | | 409 unless paused |
 | POST | `/api/timer/stop` | | the final `elapsed_seconds`; 409 if already stopped |
@@ -127,6 +134,16 @@ running_since)` against its own clock offset by `now`.
 Every route but `GET` and `POST /api/timer` is 404 when there is no timer. A
 countdown needs a target and a stopwatch refuses one; the activity follows the
 record rules.
+
+**The draft** is the record the timer will become, typed while it runs: a
+record write without its date, minutes and activity, which are the timer's —
+`{ kind?, stage_id?, goal_id?, method_id?, location_id?, tool_id?,
+references?, notes? }`. Its types are checked (unknown keys, a wrong type, a
+null `kind` or `references` are 422) and **nothing else**: no id is looked up
+and no record rule applies, so a test with no target yet or a reference with a
+blank link is accepted. A key sent is kept, null included; a key left out stays
+out, and the response returns the draft as stored. `/api/timer/record` does not
+merge it: the body is the record.
 
 ## Options
 

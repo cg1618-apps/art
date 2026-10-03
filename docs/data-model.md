@@ -131,6 +131,7 @@ index on `((true))`), and none when nothing is being timed.
 | `elapsed_seconds` | integer | no | Counted before `running_since`; ≥ 0 |
 | `stopped_at` | timestamptz | yes | Set by stop; a stopped timer waits for its record |
 | `drill_id`, `exercise_id` | integer | yes | → `drill` / `exercise`, `SET NULL`; never both (`ck_active_timer_one_activity`) |
+| `draft` | jsonb | yes | The record this timer will become, as typed: kind, test target, method, location, tool, references, notes. A key present is a choice, null included; a key absent was not touched. Unchecked until saved, and gone with the timer |
 
 - **State is derived**: running (`running_since` set), paused (neither),
   stopped (`stopped_at` set); `ck_active_timer_state` forbids both.

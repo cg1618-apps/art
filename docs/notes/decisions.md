@@ -314,6 +314,11 @@ migration seeds it. Its shape:
   drills shrink to a warm-up rather than a stage of months.
 - **Status is set by hand**, not derived from the stages, so a level can be
   passed on its test before every stage is ticked.
+- **What is being worked on is the status too, never the position.** The
+  roadmap first marked one "current stage", the first not passed. The owner
+  does not go top to bottom or one stage at a time, so the page now
+  highlights every stage and level set to 進行中, however many and wherever
+  they are.
 - **The stage number is derived** from the order, so reordering never leaves a
   stale number behind.
 - **A goal with stages is RESTRICT, not CASCADE**: the stages are the roadmap,
@@ -376,3 +381,36 @@ server holds the running timer and the browser only ticks.**
   and the owner chose one timer per record over a "next item" button.
 - The default countdown, 10 minutes on weekdays and 30 at the weekend, is the
   owner's schedule held as a constant until the Schedule module owns it.
+
+## Drills have a library of their own
+
+The owner asked for one: a drill is what is actually practised, and finding
+one only through its exercise was a click too many.
+
+- `/drills` lists every drill in the roadmap order of its exercise. **Stage and
+  topic are the exercise's**, since a drill has neither; the source is the
+  drill's own.
+- **A drill's counts are only the records naming it.** An exercise's counts
+  also take in records made through its drills, so the two add up differently
+  on purpose: a record naming only the exercise belongs to no drill.
+- A drill got a page, `/drills/:id`, with its records; saving a drill now
+  lands there. Delete stays in the form, as everywhere else.
+
+## The timer holds the record's draft
+
+The owner wanted to write the record while drawing, not only once the timer
+stops.
+
+- **The draft is on the server**, as the timer is, so a refresh or another
+  device finds it.
+- **One JSONB column, not a record's worth of columns.** A draft is half-typed
+  by design — a test with no target yet, a link not yet pasted — so its types
+  are checked and nothing else. The record rules apply once, when it is saved,
+  to the body that saves it; the server never merges the draft into that body.
+- **Autosave, not a save button**, 800 ms after the typing stops. Saves go one
+  at a time and before any action that moves the timer, because a late answer
+  to an earlier PATCH could otherwise put a stale state back over a pause or
+  a stop.
+- **The stopwatch is the default** on the start form and on a drill's
+  開始計時: the owner's call. The weekday and weekend minutes still fill the
+  countdown when it is chosen.
