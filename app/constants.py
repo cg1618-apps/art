@@ -57,6 +57,24 @@ class RecordKind(StrEnum):
     TEST = "test"
 
 
+class TimerMode(StrEnum):
+    """How the timer counts. A `countdown` carries a target and keeps counting
+    past it as overtime; a `stopwatch` carries none
+    (`ck_active_timer_target`)."""
+
+    STOPWATCH = "stopwatch"
+    COUNTDOWN = "countdown"
+
+
+class TimerState(StrEnum):
+    """Where the timer stands. Not stored: derived from `running_since` and
+    `stopped_at`, which `ck_active_timer_state` keeps from both being set."""
+
+    RUNNING = "running"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+
+
 @dataclass(frozen=True)
 class OptionCategory:
     """One category of `system_option` rows.

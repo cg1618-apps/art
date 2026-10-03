@@ -21,10 +21,16 @@ from app.services.common import merged
 #: Each option a record names, and the category it must be.
 OPTION_FIELDS = {"location_id": LOCATION, "method_id": METHOD, "tool_id": TOOL}
 
-#: Each row a record names, and what a missing id is called in the 422.
-NAMED_ROWS = {
+#: The activity a record - or the timer - names, and what a missing id is
+#: called in the 422.
+ACTIVITY_ROWS = {
     "drill_id": (Drill, "drill"),
     "exercise_id": (Exercise, "exercise"),
+}
+
+#: Each row a record names, and what a missing id is called in the 422.
+NAMED_ROWS = {
+    **ACTIVITY_ROWS,
     "stage_id": (Stage, "stage"),
     "goal_id": (Goal, "goal"),
 }
@@ -148,12 +154,26 @@ def summary(
 # --- writing ------------------------------------------------------------------
 
 
+def refuse_both_activities(row, sent: dict, owner: str) -> None:
+    """`ck_<table>_one_activity` against the MERGED row. `owner` is what the
+    422 calls the row: "record", "timer"."""
+    if merged(row, sent, "drill_id") is not None and merged(row, sent, "exercise_id") is not None:
+        raise AppError(422, f"A {owner} names a drill or an exercise, not both.")
+
+
+def check_exists(db: Session, sent: dict, named: dict) -> None:
+    """422 for any id in `sent` naming a row that does not exist. `named` is
+    `NAMED_ROWS`-shaped."""
+    for field, (model, what) in named.items():
+        if sent.get(field) is not None and db.get(model, sent[field]) is None:
+            raise AppError(422, f"No such {what}: {sent[field]}.")
+
+
 def _check(db: Session, row: Record | None, sent: dict) -> None:
     """Every rule against the MERGED row, before anything is assigned.
     Mutates `sent`: a kind set away from `test` clears the stage and goal
     unless the same save sends one."""
-    if merged(row, sent, "drill_id") is not None and merged(row, sent, "exercise_id") is not None:
-        raise AppError(422, "A record names a drill or an exercise, not both.")
+    refuse_both_activities(row, sent, "record")
 
     if "kind" in sent and sent["kind"] != RecordKind.TEST:
         for field in ("stage_id", "goal_id"):
@@ -165,19 +185,27 @@ def _check(db: Session, row: Record | None, sent: dict) -> None:
     elif targets:
         raise AppError(422, "Only a test record names a stage or a goal.")
 
-    for field, (model, what) in NAMED_ROWS.items():
-        if sent.get(field) is not None and db.get(model, sent[field]) is None:
-            raise AppError(422, f"No such {what}: {sent[field]}.")
+    check_exists(db, sent, NAMED_ROWS)
     options.check_single(db, sent, OPTION_FIELDS)
 
 
-def create(db: Session, payload) -> Record:
+def add(db: Session, payload) -> Record:
+    """Check and flush a new record WITHOUT committing, so a caller can make
+    it part of a larger transaction - saving a stopped timer as a record
+    deletes the timer in the same one. A refusal raises before anything is
+    added."""
     scalars = payload.model_dump(exclude=set(LIST_FIELDS))
     _check(db, None, scalars)
 
     record = Record(**scalars)
     record.references = resources.build(RecordReference, payload.references)
     db.add(record)
+    db.flush()
+    return record
+
+
+def create(db: Session, payload) -> Record:
+    record = add(db, payload)
     db.commit()
     return get(db, record.id)
 

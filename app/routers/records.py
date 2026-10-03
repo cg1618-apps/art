@@ -9,29 +9,20 @@ from app import schemas
 from app.constants import RecordKind
 from app.database import get_db
 from app.models import Record
-from app.routers.common import goal_ref, option_ref, resource_list, stage_ref
+from app.routers.common import activity, goal_ref, option_ref, resource_list, stage_ref
 from app.services import records, stages
 
 router = APIRouter(prefix="/api/records", tags=["Records"])
 
 
-def _activity(row: Record) -> schemas.Activity | None:
-    exercise = row.activity_exercise
-    if exercise is None:
-        return None
-    drill = row.drill
-    return schemas.Activity(
-        exercise=schemas.ExerciseRef(id=exercise.id, display_name=exercise.display_name),
-        drill=None if drill is None else schemas.DrillRef(id=drill.id, display_name=drill.display_name),
-    )
-
-
-def _response(row: Record, numbers: dict[int, int]) -> schemas.RecordResponse:
+def record_response(row: Record, numbers: dict[int, int]) -> schemas.RecordResponse:
+    """`numbers` is `stages.numbers`. Public: saving the timer as a record
+    answers with this too."""
     return schemas.RecordResponse(
         id=row.id,
         date=row.date,
         kind=row.kind,
-        activity=_activity(row),
+        activity=activity(row),
         stage=stage_ref(row.stage, numbers),
         goal=goal_ref(row.goal),
         location=option_ref(row.location),
@@ -77,22 +68,22 @@ def list_records(
     inclusive."""
     rows = records.search(db, date_from, date_to, kind, exercise_id, drill_id, stage_id, goal_id)
     numbers = stages.numbers(db)
-    return [_response(row, numbers) for row in rows]
+    return [record_response(row, numbers) for row in rows]
 
 
 @router.get("/{record_id}", response_model=schemas.RecordResponse)
 def get_record(record_id: int, db: Session = Depends(get_db)):
-    return _response(records.get(db, record_id), stages.numbers(db))
+    return record_response(records.get(db, record_id), stages.numbers(db))
 
 
 @router.post("", response_model=schemas.RecordResponse, status_code=201)
 def create_record(payload: schemas.RecordCreate, db: Session = Depends(get_db)):
-    return _response(records.create(db, payload), stages.numbers(db))
+    return record_response(records.create(db, payload), stages.numbers(db))
 
 
 @router.patch("/{record_id}", response_model=schemas.RecordResponse)
 def update_record(record_id: int, payload: schemas.RecordUpdate, db: Session = Depends(get_db)):
-    return _response(records.update(db, record_id, payload), stages.numbers(db))
+    return record_response(records.update(db, record_id, payload), stages.numbers(db))
 
 
 @router.delete("/{record_id}", status_code=204)
