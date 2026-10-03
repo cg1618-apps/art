@@ -4,20 +4,13 @@
 // page that has resources (a note, a stage). Draws nothing when there are none.
 //
 // Only an http(s) URL becomes a link, opened in a new tab; anything else - a
-// javascript: URL among them - is shown as text, as the Markdown renderer
-// would leave it.
+// javascript: URL among them - is shown as text (lib/links.js).
+import { hostOf, isWebLink } from '../lib/links'
 import { Section } from './ui/primitives'
-
-const isWebLink = (url) => /^https?:\/\//i.test(url ?? '')
 
 // A resource's words: its name, else the link's host, else the link.
 function resourceLabel(resource) {
-  if (resource.name) return resource.name
-  try {
-    return new URL(resource.url).host || resource.url
-  } catch {
-    return resource.url
-  }
+  return resource.name || hostOf(resource.url)
 }
 
 export default function ResourceList({ resources, title = '資源', as }) {

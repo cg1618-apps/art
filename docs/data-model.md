@@ -19,17 +19,19 @@ the chain builds from zero and matches the models.
 - [`stage_resource`](#stage_resource) — the links kept with a stage
 - [`system_option`](#system_option) — one value of an open vocabulary
 - [`note`](#note) — a piece of knowledge: a term, a tip, advice, a note
-- [`note_alias`](#note_alias) — names a note can be searched by
 - [`note_resource`](#note_resource) — the links kept with a note
 - [`note_topic`](#note_topic) — a note's topic tags
+- [`reference`](#reference) — a link worth keeping, with notes
+- [`reference_group`](#reference_group) — a reference's group tags
 
 ```mermaid
 flowchart TD
     O["system_option"] -->|category_id, ON DELETE SET NULL| N["note"]
-    N -->|note_id, CASCADE| A["note_alias"]
     N -->|note_id, CASCADE| R["note_resource"]
     N -->|note_id, CASCADE| T["note_topic"]
     O -->|option_id, CASCADE| T
+    RF["reference"] -->|reference_id, CASCADE| RG["reference_group"]
+    O -->|option_id, CASCADE| RG
     G["goal"] -->|goal_id, RESTRICT| S["stage"]
     S -->|stage_id, CASCADE| SR["stage_resource"]
     S -->|stage_id, SET NULL| E["exercise"]
@@ -40,8 +42,8 @@ flowchart TD
     G -->|goal_id, RESTRICT| RC
 ```
 
-**What a note owns cascades with it; what it names gives way.** Aliases,
-resources and topic links go when the note goes. Deleting an option sets
+**What a note owns cascades with it; what it names gives way.** Resources and
+topic links go when the note goes. Deleting an option sets
 `note.category_id` NULL and removes the topic links naming it — a note is worth
 keeping without them.
 
@@ -62,8 +64,13 @@ dish to the drill's recipe.
 | `description` | text | yes | Searched |
 | `remark` | text | yes | |
 
-Children, each the shape of its `note_` counterpart: `exercise_alias`,
-`exercise_resource` and `exercise_topic` (`topic` options only).
+Children: `exercise_alias` — `id`, `exercise_id` (`CASCADE`, indexed),
+`value`; anything you might type to find the exercise, searched and never
+displayed; `uq_exercise_alias` on `(exercise_id, value)`,
+`ix_exercise_alias_lookup` on `lower(value)`; a save reconciles the list by
+value, so an unchanged alias keeps its row — and `exercise_resource` and
+`exercise_topic` (`topic` options only), each the shape of its `note_`
+counterpart.
 
 **An exercise with drills, or named by records, cannot be deleted**; the API
 says how many of each are in the way.
@@ -217,33 +224,21 @@ is checked in the service (a foreign key cannot see the category).
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |
 | `id` | integer | no | | |
-| `name_cn`, `name_en`, `name_alt` | text | yes | | At least one (`ck_note_has_a_name`). **Not unique.** |
+| `name` | text | no | | Trimmed and not blank (`ck_note_name_not_blank`: `btrim(name) <> ''`). **Not unique.** Searched. |
 | `category_id` | integer | yes | | → `system_option`, `ON DELETE SET NULL`, indexed. A `note_category` option. |
 | `summary` | text | yes | | One or two sentences; a 名詞's definition. Shown in lists and searched. |
-| `body` | text | yes | | Markdown. Not searched. |
+| `body` | text | yes | | Markdown. Searched. |
 | `remark` | text | yes | | |
 | `visibility` | text | no | `private` | `private`, `unlisted` or `public` (`ck_note_visibility`). Nothing reads it yet. |
 
-`display_name` is `name_cn`, else `name_en`, else `name_alt`
-(`NameFallbackMixin`).
+**One name**, not the three slots and the aliases the other named rows carry
+(`notes/decisions.md`, "A note has one name").
 
 **The category is optional**: a note is worth writing before you decide what
 kind it is.
 
 **`visibility` is reserved.** It exists so that sharing, when it is built, adds
 checks rather than a column; see `CLAUDE.md`, "Who can see it".
-
-## `note_alias`
-
-| Column | Type | Null | Notes |
-| --- | --- | --- | --- |
-| `id` | integer | no | |
-| `note_id` | integer | no | → `note`, `CASCADE`, indexed |
-| `value` | text | no | |
-
-Anything you might type to find a note; searched, never displayed.
-`uq_note_alias` on `(note_id, value)`; `ix_note_alias_lookup` on `lower(value)`.
-A save reconciles the list by value, so an unchanged alias keeps its row.
 
 ## `note_resource`
 
@@ -263,6 +258,32 @@ A save reconciles the list by value, so an unchanged alias keeps its row.
 | `option_id` | integer | no | → `system_option`, `CASCADE`; part of the PK; `ix_note_topic_option` |
 
 `topic` options only. Returned ordered by the option's `sort_order`.
+
+## `reference`
+
+A link worth keeping: a page of poses, a set of expressions, a tutorial.
+Other kinds of reference — an uploaded image — are designed when they are
+built; nothing in this table anticipates them.
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| `id` | integer | no | |
+| `name` | text | no | Trimmed and not blank (`ck_reference_name_not_blank`). Not unique. |
+| `url` | text | no | `ck_reference_has_a_url` (`btrim(url) <> ''`). http or https; a URL with no scheme is stored with `https://`, as a resource's. |
+| `notes` | text | yes | Markdown. |
+
+No `visibility`: a reference is someone else's page, never published from
+here.
+
+## `reference_group`
+
+| Column | Type | Null | Notes |
+| --- | --- | --- | --- |
+| `reference_id` | integer | no | → `reference`, `CASCADE`; part of the PK |
+| `option_id` | integer | no | → `system_option`, `CASCADE`; part of the PK; `ix_reference_group_option` |
+
+`reference_group` options only, checked by the service. Returned ordered by the
+option's `sort_order`. Named `<owner>_<tag>`, as `note_topic` is.
 
 ## The exercise seed
 

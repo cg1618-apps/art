@@ -9,7 +9,15 @@ from sqlalchemy.orm import Session
 
 from app.constants import OPTION_CATEGORIES
 from app.errors import AppError, StaleCountError
-from app.models import Drill, ExerciseTopic, Note, NoteTopic, Record, SystemOption
+from app.models import (
+    Drill,
+    ExerciseTopic,
+    Note,
+    NoteTopic,
+    Record,
+    ReferenceGroup,
+    SystemOption,
+)
 
 DUPLICATE = "That category already has that value."
 
@@ -26,6 +34,7 @@ REFERENCES = (
     Note.category_id,
     NoteTopic.option_id,
     ExerciseTopic.option_id,
+    ReferenceGroup.option_id,
     Drill.source_id,
     Record.location_id,
     Record.method_id,

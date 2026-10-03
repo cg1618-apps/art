@@ -1,38 +1,30 @@
 """Notes: knowledge not tied to any one record, tool or reference - terms,
 tips, advice, notes in general.
 
-What a note OWNS - aliases, resources, topic links - cascades with it. What it
-NAMES - its category - is SET NULL when the option goes, because a category is
+What a note OWNS - resources, topic links - cascades with it. What it NAMES -
+its category - is SET NULL when the option goes, because a category is
 optional and a note is worth keeping without one.
 """
 
-from sqlalchemy import (
-    CheckConstraint,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import Visibility
 from app.database import Base
-from app.models.base import NameFallbackMixin, TimestampMixin, in_clause
+from app.models.base import TimestampMixin, in_clause
 from app.models.system_option import SystemOption
 
 
-class Note(Base, TimestampMixin, NameFallbackMixin):
-    """Names are not unique, as `food`'s dishes: two notes may share one."""
+class Note(Base, TimestampMixin):
+    """One name, required and not unique: two notes may share one. Not the
+    three name slots the other named rows carry - see decisions.md, "A note
+    has one name"."""
 
     __tablename__ = "note"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name_cn: Mapped[str | None] = mapped_column(String, nullable=True)
-    name_en: Mapped[str | None] = mapped_column(String, nullable=True)
-    name_alt: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Trimmed by the schema; the check holds it for a row written any other way.
+    name: Mapped[str] = mapped_column(String, nullable=False)
     # Must be a `note_category` option; a FK cannot see the category, so the
     # service checks it.
     category_id: Mapped[int | None] = mapped_column(
@@ -53,9 +45,6 @@ class Note(Base, TimestampMixin, NameFallbackMixin):
     )
 
     category = relationship(SystemOption, foreign_keys=[category_id])
-    aliases = relationship(
-        "NoteAlias", back_populates="note", cascade="all, delete-orphan", passive_deletes=True
-    )
     resources = relationship(
         "NoteResource",
         back_populates="note",
@@ -71,27 +60,8 @@ class Note(Base, TimestampMixin, NameFallbackMixin):
     )
 
     __table_args__ = (
-        CheckConstraint("num_nonnulls(name_cn, name_en, name_alt) >= 1", name="ck_note_has_a_name"),
+        CheckConstraint("btrim(name) <> ''", name="ck_note_name_not_blank"),
         CheckConstraint(in_clause("visibility", Visibility), name="ck_note_visibility"),
-    )
-
-
-class NoteAlias(Base):
-    """Anything you might type to find a note. Never displayed, searched."""
-
-    __tablename__ = "note_alias"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    note_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("note.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    value: Mapped[str] = mapped_column(String, nullable=False)
-
-    note = relationship("Note", back_populates="aliases")
-
-    __table_args__ = (
-        UniqueConstraint("note_id", "value", name="uq_note_alias"),
-        Index("ix_note_alias_lookup", func.lower(value)),
     )
 
 

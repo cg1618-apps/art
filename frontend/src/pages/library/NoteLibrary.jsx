@@ -1,9 +1,9 @@
 // Frontend: the notes library, /notes.
 //
 // The search box and two filters, category and topic, all in the URL
-// (hooks/useUrlFilters) and all applied by the server: `q` over the names,
-// the aliases and the summary; repeated `category_id` and `topic_id`, each
-// "any of". The server orders by display name.
+// (hooks/useUrlFilters) and all applied by the server: `q` over the name,
+// the summary and the body; repeated `category_id` and `topic_id`, each
+// "any of". The server orders by name.
 //
 // Each card is the note's name, its category, its topics and its summary - the
 // summary is what a 名詞 is defined by, so it is what a scan of the list reads.
@@ -38,7 +38,7 @@ function NoteCard({ note }) {
     >
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 font-display text-lg font-bold leading-snug text-text group-hover:text-brand">
-          {note.display_name}
+          {note.name}
         </p>
         {note.category ? (
           <Chip tone="brand" className="shrink-0" title={note.category.description || undefined}>
@@ -97,7 +97,7 @@ export default function NoteLibrary() {
       sidebar={sidebar}
       query={notes}
       renderItem={(note) => <NoteCard note={note} />}
-      searchPlaceholder="搜尋名稱、別名或摘要…"
+      searchPlaceholder="搜尋名稱、摘要或內文…"
       emptyText="還沒有任何筆記。"
       noMatchText="沒有符合條件的筆記。"
     />

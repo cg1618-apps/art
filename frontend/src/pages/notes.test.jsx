@@ -23,16 +23,12 @@ const ref = ({ id, value, description }) => ({ id, value, description })
 
 const NOTE = {
   id: 7,
-  display_name: '消失點',
-  name_cn: '消失點',
-  name_en: 'Vanishing point',
-  name_alt: null,
+  name: '消失點',
   category: ref(CATEGORIES[0]),
   topics: [ref(TOPICS[0])],
   summary: '平行線在遠方交會的點。',
   visibility: 'private',
   updated_at: '2026-10-03T00:00:00Z',
-  aliases: ['VP'],
   body: '**重點**\n\n<script>alert(1)</script>',
   remark: null,
   resources: [
@@ -174,10 +170,7 @@ describe('the note form', () => {
     handler = (call) => (call.method === 'POST' ? json({ ...NOTE, id: 9 }, 201) : null)
     renderAt('/notes/new')
 
-    fireEvent.change(screen.getByRole('textbox', { name: '中文名' }), { target: { value: ' 透視線 ' } })
-    fireEvent.change(screen.getByRole('textbox', { name: /別名/ }), {
-      target: { value: 'a，b、A\nc' },
-    })
+    fireEvent.change(screen.getByRole('textbox', { name: '名稱' }), { target: { value: ' 透視線 ' } })
     fireEvent.click(await screen.findByRole('button', { name: '名詞' }))
     // The picker shows the chosen option's description.
     expect(screen.getByText('一個詞的定義')).toBeTruthy()
@@ -197,10 +190,7 @@ describe('the note form', () => {
     const post = calls.find((call) => call.method === 'POST')
     expect(post.url).toBe('/api/notes')
     expect(post.body).toEqual({
-      name_cn: '透視線',
-      name_en: null,
-      name_alt: null,
-      aliases: ['a', 'b', 'c'],
+      name: '透視線',
       category_id: 1,
       topic_ids: [10, 11],
       summary: null,
@@ -217,21 +207,21 @@ describe('the note form', () => {
   it('refuses a note with no name without sending it', async () => {
     renderAt('/notes/new')
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
-    expect(await screen.findByText('至少要有一個名稱。')).toBeTruthy()
+    expect(await screen.findByText('請填寫名稱。')).toBeTruthy()
     expect(calls.some((call) => call.method === 'POST')).toBe(false)
   })
 
   it('loads an existing note and PATCHes it, clearing the category', async () => {
     handler = (call) => (call.method === 'PATCH' ? json(NOTE) : null)
     renderAt('/notes/7/edit')
-    expect(await screen.findByDisplayValue('Vanishing point')).toBeTruthy()
-    expect(screen.getByRole('textbox', { name: /別名/ }).value).toBe('VP')
+    expect(await screen.findByDisplayValue('消失點')).toBeTruthy()
     // Clicking the chosen category again clears it.
     fireEvent.click(await screen.findByRole('button', { name: '名詞', pressed: true }))
     fireEvent.click(screen.getByRole('button', { name: '儲存' }))
     await waitFor(() => expect(location()).toBe('/notes/7'))
     const patch = calls.find((call) => call.method === 'PATCH')
     expect(patch.url).toBe('/api/notes/7')
+    expect(patch.body.name).toBe('消失點')
     expect(patch.body.category_id).toBeNull()
     expect(patch.body.topic_ids).toEqual([10])
     expect(patch.body.resources).toEqual([

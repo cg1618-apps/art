@@ -157,7 +157,7 @@ describe('routing', () => {
     expect(location()).toBe('/roadmap')
     const nav = screen.getAllByRole('navigation', { name: '主要' })[0]
     const links = within(nav).getAllByRole('link').map((link) => link.textContent)
-    expect(links.slice(1)).toEqual(['路線圖', '練習', '練法', '紀錄', '計時', '筆記', '選項'])
+    expect(links.slice(1)).toEqual(['路線圖', '練習', '練法', '紀錄', '計時', '參考', '筆記', '選項'])
   })
 })
 

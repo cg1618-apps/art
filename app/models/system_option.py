@@ -6,8 +6,8 @@ shows everywhere at once.
 
 What names an option gives way when it is deleted: single-valued references -
 `note.category_id`, `drill.source_id`, `record.location_id`, `.method_id`,
-`.tool_id` - are set NULL, and tag links - `note_topic`, `exercise_topic` -
-cascade.
+`.tool_id` - are set NULL, and tag links - `note_topic`, `exercise_topic`,
+`reference_group` - cascade.
 The API states how many before it deletes (`DELETE ...?in_use=n`).
 """
 

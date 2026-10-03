@@ -138,4 +138,6 @@ def options(make_option):
         "source": make_option("source", "Character Art School"),
         "location": make_option("location", "台灣・家"),
         "tool": make_option("tool", "Clip Studio Paint"),
+        "reference_group": make_option("reference_group", "表情"),
+        "other_reference_group": make_option("reference_group", "配件", description="帽子、眼鏡"),
     }

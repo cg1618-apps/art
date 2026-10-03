@@ -5,6 +5,12 @@
 // bar's height (and the phone's safe area) so the bar never covers the last
 // line of a page.
 //
+// The phone's bar gives every entry the same width but never less than fits
+// its label (3.5rem: three characters and their padding). Eight entries
+// outgrow a 360px screen, so past that the bar scrolls sideways - with no
+// scrollbar drawn - and the active entry is scrolled into view, rather than
+// squeezing labels until they truncate.
+//
 // The active section is marked with aria-current="page" and styled from that
 // attribute, so what a screen reader announces and what the eye sees cannot
 // disagree. See lib/nav.js for the match.
@@ -13,6 +19,7 @@
 // is around every page, and while a timer exists its chip sits at the right
 // of the top bar. On a phone the top bar holds only the chip, and shows only
 // while there is one - the sections are in the bar at the bottom.
+import { useEffect, useRef } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { useTimer } from '../../hooks/useTimer'
@@ -46,6 +53,15 @@ function Frame() {
   const { pathname } = useLocation()
   const active = activeSection(pathname)
   const { timer } = useTimer()
+  const bottomBar = useRef(null)
+
+  // Keep the active entry visible when the bar scrolls. Optional calls:
+  // jsdom has no scrollIntoView.
+  useEffect(() => {
+    bottomBar.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [active])
 
   return (
     <div className="min-h-screen">
@@ -82,13 +98,13 @@ function Frame() {
       </main>
 
       <nav
+        ref={bottomBar}
         aria-label="主要"
-        style={{ gridTemplateColumns: `repeat(${SECTIONS.length}, minmax(0, 1fr))` }}
-        className="fixed inset-x-0 bottom-0 z-30 grid border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur [scrollbar-width:none] md:hidden"
       >
         <NavItems
           active={active}
-          className="relative truncate px-1 py-3 text-center font-display text-base text-text-muted aria-[current=page]:text-brand aria-[current=page]:before:absolute aria-[current=page]:before:inset-x-4 aria-[current=page]:before:top-0 aria-[current=page]:before:h-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-brand"
+          className="relative min-w-14 flex-1 shrink-0 whitespace-nowrap px-1 py-3 text-center font-display text-base text-text-muted aria-[current=page]:text-brand aria-[current=page]:before:absolute aria-[current=page]:before:inset-x-4 aria-[current=page]:before:top-0 aria-[current=page]:before:h-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-brand"
         />
       </nav>
     </div>

@@ -15,7 +15,7 @@ def normalise(value):
     """An empty form field is an absent value, not an empty string.
 
     Without this, clearing a name in the UI stores "" - which satisfies
-    `num_nonnulls` and defeats `ck_note_has_a_name`.
+    `num_nonnulls` and defeats `ck_exercise_has_a_name`.
     """
     if not isinstance(value, str):
         return value
@@ -29,6 +29,16 @@ def require_a_name(model, message: str):
     if not any(getattr(model, field) for field in NAME_FIELDS):
         raise ValueError(message)
     return model
+
+
+def required_text(value, message: str):
+    """A required one-line text field - a note's or a reference's `name`:
+    trimmed, and refused when nothing is left. The schema's half of
+    `ck_<table>_name_not_blank`."""
+    value = normalise(value)
+    if value is None:
+        raise ValueError(message)
+    return value
 
 
 def not_null(value, message: str):

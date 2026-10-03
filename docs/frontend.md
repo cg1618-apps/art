@@ -13,9 +13,10 @@ Tailwind 4 with `food`'s design tokens, Vitest. Why `food`'s and not
 | `src/api/endpoints.js` | every API URL |
 | `src/hooks/useApi.js` | `useApiQuery`, `useApiMutation`, `useOptionCategories`, `useOptions(category)` |
 | `src/hooks/useUrlFilters.js` | search and filters kept in the URL: typing replaces the history entry (debounced), a filter click pushes one |
-| `src/components/layout/` | `Layout` (top nav from `lib/nav.js`), `LibraryLayout`, `FilterPanel` |
+| `src/components/layout/` | `Layout` (the navigation from `lib/nav.js`: a top bar on a desktop, a bottom bar on a phone), `LibraryLayout`, `FilterPanel` |
 | `src/components/forms/` | `OptionPicker`, `ResourceRows` (the name + link row editor every form with resources uses), `DeleteDialog`, `FormActions` |
 | `src/components/ResourceList.jsx` | resources on a detail page |
+| `src/lib/links.js` | `isWebLink` and `hostOf`: only an http(s) URL is drawn as a link |
 | `src/components/RecordList.jsx` | records as rows, used by the records, exercise and stage pages |
 | `src/components/forms/ActivitySelect.jsx` | an exercise, then optionally one of its drills; the record form and the timer use it |
 | `src/lib/timer.js`, `src/hooks/useTimer.js`, `src/components/timer/` | the timer's arithmetic and formatting, its context, the top bar chip, and `StartTimerButton` (a drill's 開始計時) |
@@ -30,6 +31,12 @@ Tailwind 4 with `food`'s design tokens, Vitest. Why `food`'s and not
 There is no route guard and no `/edit` prefix: Cloudflare Access gates the
 whole hostname, so every page is the owner's.
 
+**The navigation** is 路線圖 · 練習 · 練法 · 紀錄 · 計時 · 參考 · 筆記 · 選項,
+from `lib/nav.js`. On a phone it is a bar fixed to the bottom of the screen;
+each entry is at least 3.5rem wide, so its label never truncates, and when
+the entries outgrow the screen the bar scrolls sideways (no scrollbar is
+drawn) and keeps the active entry in view.
+
 ## Pages
 
 | Route | Page |
@@ -39,9 +46,12 @@ whole hostname, so every page is the owner's.
 | `/roadmap/goals/new`, `/roadmap/goals/:id/edit` | goal form; the date appears only for 已達成. Saving or deleting returns to the roadmap |
 | `/roadmap/stages/:id` | a stage: description, test, resources, remark, status, its level, its exercises and its test records |
 | `/roadmap/stages/new?goal=:id`, `/roadmap/stages/:id/edit` | stage form; changing the level puts the stage last in it |
+| `/references` | search box (name, link, notes) and the 參考分組 filter with 未分組, all in the URL; filtering is server-side. Each card: the name, which opens the link itself in a new tab; the link's host; the group chips; the start of the notes; and 詳細, the reference's page |
+| `/references/:id` | the reference: the link, its groups (each a link to the library filtered by it), the notes as Markdown, delete |
+| `/references/new`, `/references/:id/edit` | one form: name, link (a link with no scheme gets `https://`), groups, notes. Saving goes to the reference's page |
 | `/notes` | search box and filter chips for category and topic, all in the URL; filtering is server-side; cards show the name, category, topics and summary |
-| `/notes/:id` | the note: summary, Markdown body, resources, remark, delete. Aliases are not shown: they exist to be searched |
-| `/notes/new`, `/notes/:id/edit` | one form: three names, aliases in one box (split on `,`, `，`, `、` and newlines), category, topics, summary, body, resources as name + link rows moved with ↑/↓, remark, visibility |
+| `/notes/:id` | the note: summary, Markdown body, resources, remark, delete |
+| `/notes/new`, `/notes/:id/edit` | one form: the name, category, topics, summary, body, resources as name + link rows moved with ↑/↓, remark, visibility |
 | `/exercises` | grouped by stage in roadmap order, then 不分階段; search and a topic filter in the URL |
 | `/exercises/:id` | description, resources, topics, remark; drills as cards (source, unit × target, minutes, frequency, Markdown instructions, links), each with 記錄 → `/records/new?drill=`; the exercise's records and total minutes |
 | `/exercises/new`, `/exercises/:id/edit` | exercise form |
@@ -51,7 +61,7 @@ whole hostname, so every page is the owner's.
 | `/records` | grouped by date, newest first, each day's total (of the records shown, so it follows the filters) and this week's total, Monday to Sunday, from the summary; kind and exercise filters in the URL |
 | `/records/new`, `/records/:id/edit` | date (today), location (the most recent record's), tool (Clip Studio Paint), an exercise then optionally one of its drills (`?drill=` or `?exercise=` preselects), kind, a stage or level when 測驗, method with descriptions, minutes, references, notes. The defaults fill only untouched fields |
 | `/timer` | with no timer, a start form: stopwatch (the default) or countdown, 10 / 30 minutes or a custom length (the default by weekday: 10 Monday to Friday, 30 at the weekend — a constant in `lib/timer.js` until Schedule owns it), and an optional exercise then drill. With one: large digits, the activity, pause / resume, 停止, 捨棄, and the 紀錄草稿 below it. A countdown past zero keeps counting as `+m:ss` and plays one short tone |
-| `/options` | one section per category: its label and description, then its values with description, remark, order and how many places use each (notes, exercises, drills, records). Add and edit in place; delete opens a dialog stating the count and sends it with the request. If the count changed, the dialog shows the new one and asks again |
+| `/options` | one section per category: its label and description, then its values with description, remark, order and how many places use each (notes, exercises, drills, records, references). Add and edit in place; delete opens a dialog stating the count and sends it with the request. If the count changed, the dialog shows the new one and asks again |
 
 **Every option picker shows the value's description** and links to
 `/options`, so what a value means is visible where it is chosen.

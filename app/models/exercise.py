@@ -83,7 +83,8 @@ class Exercise(Base, TimestampMixin, NameFallbackMixin):
 
 
 class ExerciseAlias(Base):
-    """Anything you might type to find an exercise. `note_alias`'s shape."""
+    """Anything you might type to find an exercise. Searched, never
+    displayed; `food`'s alias table."""
 
     __tablename__ = "exercise_alias"
 

@@ -137,7 +137,8 @@ settles the rest.
   (Google Drive or Google Photos).
 - **Work** — names, images, status, and the `visibility` field every shareable
   entity here carries.
-- **Reference** — an image or a link, plus tags.
+- **Reference** — links built, with group tags; see `docs/data-model.md`.
+  Images wait for the platform's answer on storage, below.
 - **Artist** — names, links, notes on what is worth learning from them.
 
 ### The decisions behind that shape
@@ -181,7 +182,9 @@ which the APIs can supply again, from `static/library`, which nothing can.
 
 `name_cn`, `name_en` and `name_alt`, at least one required, with `name_cn` as
 the display default, and the aliases in a child table that is searched and
-never displayed — `food`'s dish shape, which `note` follows exactly.
+never displayed — `food`'s dish shape, which goals, stages and exercises
+follow. A note and a reference carry one `name` instead; see "A note has one
+name".
 
 ### Out of scope, deliberately
 
@@ -275,8 +278,8 @@ than for a 小技巧, so the category files a note and nothing more, and a new
 category is a row. The glossary is Notes filtered to 名詞. A note's `summary`
 is its definition when it is a term.
 
-Search covers names, aliases and the summary, and not the body: a word inside
-a long note would bury the note you meant.
+Search covers the name, the summary and the body; see "A note has one name"
+for why the body is now included.
 
 Notes about one tool belong to the Tool module and a record's notes to the
 record; Notes holds what is tied to neither.
@@ -414,3 +417,67 @@ stops.
 - **The stopwatch is the default** on the start form and on a drill's
   開始計時: the owner's call. The weekday and weekend minutes still fill the
   countdown when it is chosen.
+
+## A note has one name
+
+The owner's words: "for a note, we just need one name. we don't need 4
+fields for name." A note is the owner's own writing, looked up by the word
+they gave it; the three slots and the aliases were `food`'s dish shape
+inherited by default, and nobody was filling more than one of them.
+
+- **`name`, required, trimmed, not blank, not unique** —
+  `ck_note_name_not_blank` (`btrim(name) <> ''`). Two notes may still share a
+  name, as before.
+- **`note_alias` is gone**, not kept for search: the one name is what is
+  searched. Goals, stages and exercises keep the three slots and (exercises)
+  aliases — this is a decision about notes, not a new house rule.
+- **Search now covers the body.** It did not, so that a word inside a long
+  note would not bury the note you meant. With aliases gone, the body is the
+  only place a second name for a thing can live, and a note that cannot be
+  found by a word it contains is the worse failure for the one person who
+  wrote it. The list is still ordered by name, so a name match is not
+  outranked; it is only no longer the only way in.
+- **The migration loses nothing typed.** `0007_note_name` keeps the first
+  filled slot — cn, en, alt, the order the library showed — and appends every
+  other slot and alias that differs from it to the remark, as one line,
+  `其他名稱：a、b、c`. The downgrade restores the columns and copies the name
+  into `name_cn`; it leaves the 其他名稱 line in the remark rather than guess
+  which slot each name came from.
+
+## References are links, filed by groups
+
+The owner's words: "It is essentially some links and notes. For each link, we
+can add multiple group tags to it. There will be more things beyond just
+links, but we'll deal with those later."
+
+- **One table, `reference`: name, link, notes.** One required name, as a
+  note's now is. The link is validated as a resource's is — http or https,
+  `https://` added when no scheme was typed — by the same `normalise_link`.
+- **No `kind` column.** The other kinds of reference are not designed, and a
+  kind with one value is a column every row pays for and nothing reads. An
+  image reference will need storage the platform has not decided (see "Image
+  storage"), so its shape is decided then — a column, a sibling table, or a
+  child of this one — with the real thing in hand.
+- **No `visibility`.** A reference is someone else's page. Sharing, when it
+  comes with Works, shares the owner's own work; nothing here is published.
+- **Groups are a Tier 2 option category, `reference_group` (參考分組)**, seeded
+  empty: the owner creates the groups. This is the "Expressions and
+  accessories are tags on references" decision above, made concrete — 表情 and
+  配件 are groups, not libraries.
+- **The link table is `reference_group`**, `<owner>_<tag>` as `note_topic` and
+  `exercise_topic` are. `reference_group_link` was the other candidate and was
+  rejected: in this schema a `_link` table holds URLs (`drill_source_link`),
+  and a tag table named like one would read as a list of links.
+- **A library row carries `notes_excerpt`, not the notes**, as a note's row
+  carries its summary and not its body: the start of the notes as one line, cut
+  at 120 characters. A reference has no summary field of its own; the excerpt
+  is enough to recognise one in a list without paying for every note in full.
+- **A card holds two links**, so it is not one link as a note's card is: the
+  name opens the reference itself in a new tab — the reason it was kept — and
+  詳細 opens its page here. Nested anchors are invalid, so the card is an
+  article with both inside.
+- **The phone's bottom bar scrolls sideways.** An eighth entry, 參考, would
+  have left each column narrower than a three-character label on a 360px
+  screen (路線圖 was already cut at seven). Each entry now keeps at least
+  3.5rem and the bar scrolls, with the active entry kept in view, rather than
+  shrinking the type or dropping an entry into a "more" menu.

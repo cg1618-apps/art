@@ -15,8 +15,9 @@ from app.models.exercise import (
     ExerciseTopic,
 )
 from app.models.goal import Goal, Stage, StageResource
-from app.models.note import Note, NoteAlias, NoteResource, NoteTopic
+from app.models.note import Note, NoteResource, NoteTopic
 from app.models.record import Record, RecordReference
+from app.models.reference import Reference, ReferenceGroup
 from app.models.system_option import SystemOption
 from app.models.timer import ActiveTimer
 
@@ -31,11 +32,12 @@ __all__ = [
     "ExerciseTopic",
     "Goal",
     "Note",
-    "NoteAlias",
     "NoteResource",
     "NoteTopic",
     "Record",
     "RecordReference",
+    "Reference",
+    "ReferenceGroup",
     "Stage",
     "StageResource",
     "SystemOption",

@@ -4,9 +4,8 @@
 // where you came from, Delete through the shared dialog. Saving goes to the
 // note's page.
 //
-// What it holds: the three name slots (at least one, `ck_note_has_a_name`),
-// aliases typed into one box and split on , ， 、 and newlines (food's), the
-// category and the topics through OptionPicker, the summary, the Markdown
+// What it holds: the name (required, `ck_note_name_not_blank`), the category
+// and the topics through OptionPicker, the summary, the Markdown
 // body, the resources as name + link rows that are added, removed and moved,
 // the remark and the visibility.
 //
@@ -25,17 +24,14 @@ import ResourceRows from '../../components/forms/ResourceRows'
 import { Field, Input, Section, Select, TextArea } from '../../components/ui/primitives'
 import { ErrorNote, Loading } from '../../components/ui/states'
 import { invalidateResources, useApiMutation, useApiQuery, useOptions } from '../../hooks/useApi'
-import { blankToNull, resourcesFromApi, resourcesToPayload, splitAliases } from '../../lib/rowList'
+import { blankToNull, resourcesFromApi, resourcesToPayload } from '../../lib/rowList'
 import { DEFAULT_VISIBILITY, VISIBILITIES } from '../../lib/visibility'
 
 // A save changes the list, this note's page, and every option's in_use count.
 const INVALIDATE = [endpoints.notes.list(), endpoints.options.list()]
 
 const EMPTY = {
-  name_cn: '',
-  name_en: '',
-  name_alt: '',
-  aliases: '',
+  name: '',
   category_id: null,
   topic_ids: [],
   summary: '',
@@ -47,10 +43,7 @@ const EMPTY = {
 
 function fromNote(note) {
   return {
-    name_cn: note.name_cn ?? '',
-    name_en: note.name_en ?? '',
-    name_alt: note.name_alt ?? '',
-    aliases: (note.aliases ?? []).join('、'),
+    name: note.name ?? '',
     category_id: note.category?.id ?? null,
     topic_ids: (note.topics ?? []).map((topic) => topic.id),
     summary: note.summary ?? '',
@@ -64,10 +57,7 @@ function fromNote(note) {
 /** The form as the API's NoteWrite. A resource row with no link is dropped. */
 function toPayload(form) {
   return {
-    name_cn: blankToNull(form.name_cn),
-    name_en: blankToNull(form.name_en),
-    name_alt: blankToNull(form.name_alt),
-    aliases: splitAliases(form.aliases),
+    name: blankToNull(form.name),
     category_id: form.category_id,
     topic_ids: form.topic_ids,
     summary: blankToNull(form.summary),
@@ -111,8 +101,8 @@ export default function NoteForm() {
     event.preventDefault()
     setError(null)
     const body = toPayload(form)
-    if (!body.name_cn && !body.name_en && !body.name_alt) {
-      setError(new Error('至少要有一個名稱。'))
+    if (!body.name) {
+      setError(new Error('請填寫名稱。'))
       return
     }
     try {
@@ -136,7 +126,7 @@ export default function NoteForm() {
       <header className="space-y-1">
         <h1 className="font-display text-2xl font-bold">{isNew ? '新增筆記' : '編輯筆記'}</h1>
         {!isNew && existing.data ? (
-          <p className="text-sm text-text-muted">{existing.data.display_name}</p>
+          <p className="text-sm text-text-muted">{existing.data.name}</p>
         ) : null}
       </header>
 
@@ -146,24 +136,9 @@ export default function NoteForm() {
       {isNew || existing.data ? (
         <>
           <Section title="名稱">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="中文名">
-                <Input value={form.name_cn} onChange={set('name_cn')} />
-              </Field>
-              <Field label="英文名">
-                <Input value={form.name_en} onChange={set('name_en')} />
-              </Field>
-              <Field label="其他名稱">
-                <Input value={form.name_alt} onChange={set('name_alt')} />
-              </Field>
-              <Field
-                label="別名"
-                className="sm:col-span-3"
-                hint="用 , ， 、 或換行分開。只用來搜尋，不會顯示。"
-              >
-                <TextArea rows={2} value={form.aliases} onChange={set('aliases')} />
-              </Field>
-            </div>
+            <Field label="名稱">
+              <Input value={form.name} onChange={set('name')} />
+            </Field>
           </Section>
 
           <Section title="分類">
@@ -228,11 +203,11 @@ export default function NoteForm() {
 
       {deleting ? (
         <DeleteDialog
-          title={`刪除筆記「${existing.data?.display_name ?? ''}」？`}
+          title={`刪除筆記「${existing.data?.name ?? ''}」？`}
           onConfirm={remove}
           onClose={() => setDeleting(false)}
         >
-          <p>刪除後就找不回來了。它的別名和資源會一起刪掉；分類和主題會留著。</p>
+          <p>刪除後就找不回來了。它的資源會一起刪掉；分類和主題會留著。</p>
         </DeleteDialog>
       ) : null}
     </form>

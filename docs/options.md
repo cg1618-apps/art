@@ -20,7 +20,7 @@ the tier: **does code branch on the exact value?**
 | `RecordKind` | `practice`, `piece`, `test` (練習, 作品, 測驗) | `record.kind`; a test names a stage or a goal |
 | `TimerMode` | `stopwatch`, `countdown` | `active_timer.mode` |
 | `TimerState` | `running`, `paused`, `stopped` | derived for responses, never stored |
-| `OPTION_CATEGORIES` | `note_category`, `topic`, `method`, `source`, `location`, `tool` | `system_option.category`, and the Options page's section order |
+| `OPTION_CATEGORIES` | `note_category`, `topic`, `method`, `source`, `location`, `tool`, `reference_group` | `system_option.category`, and the Options page's section order |
 
 **Categories are registered, not typed.** Each has a key, a label and a
 description, and the Options page heads each section with the label and the
@@ -43,6 +43,7 @@ is a note to yourself, shown only on the Options page.
 | `source` | 來源 | `drill.source_id` | Character Art School, Character Art School: Coloring, Manga Art School, Perspective Art School, 自訂, 其他 |
 | `location` | 地點 | `record.location_id` | 台灣・家, 美國・家 |
 | `tool` | 工具 | `record.tool_id` | Clip Studio Paint, Procreate, 紙筆 |
+| `reference_group` | 參考分組 | `reference_group` (several per reference) | none — the owner creates the groups |
 
 The seeded `method` values carry these descriptions:
 
@@ -67,6 +68,6 @@ says what a fresh database starts with.
 - **A value's category never changes** once created.
 - **Deleting a value in use states the cost first.** The page shows how many
   references it removes; the delete is refused if that count has changed by
-  the time it arrives. Then topic links are removed and single references set
-  to none.
+  the time it arrives. Then tag links — topics, reference groups — are removed
+  and single references set to none.
 - A category's values are unique after trimming, ignoring case.

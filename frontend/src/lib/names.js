@@ -1,6 +1,6 @@
 // Frontend: a named thing's other names.
 //
-// A note, a stage and an exercise each carry three name slots and a
+// A stage and an exercise each carry three name slots and a
 // `display_name` chosen from them by the server; a detail page shows the name
 // as its heading and the remaining slots in a line beneath.
 

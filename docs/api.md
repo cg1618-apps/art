@@ -148,8 +148,9 @@ merge it: the body is the record.
 ## Options
 
 `OptionResponse`: `{ id, category, value, description, remark, sort_order, in_use }`.
-`in_use` counts the notes whose category is the option plus the topic links
-naming it — what a delete would remove.
+`in_use` counts every reference to the option — a note's category, a note's or
+an exercise's topic link, a reference's group link, a drill's source, a
+record's location, method or tool — which is what a delete would remove.
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
@@ -161,17 +162,16 @@ naming it — what a delete would remove.
 
 ## Notes
 
-`NoteSummary`: `{ id, display_name, name_cn, name_en, name_alt, category,
-topics, summary, visibility, updated_at }`, where `category` is
-`{ id, value, description } | null` and `topics` a list of the same.
+`NoteSummary`: `{ id, name, category, topics, summary, visibility,
+updated_at }`, where `category` is `{ id, value, description } | null` and
+`topics` a list of the same.
 
-`NoteResponse`: the summary plus `{ aliases, body, remark, resources,
-created_at }`; `aliases` sorted, `resources` `[{ id, name, url }]` in their
-saved order.
+`NoteResponse`: the summary plus `{ body, remark, resources, created_at }`;
+`resources` `[{ id, name, url }]` in their saved order.
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
-| GET | `/api/notes` | `?q=&category_id=&topic_id=` | summaries ordered by display name |
+| GET | `/api/notes` | `?q=&category_id=&topic_id=` | summaries ordered by name, ignoring case, then id |
 | GET | `/api/notes/{id}` | | `NoteResponse` |
 | POST | `/api/notes` | below | 201 |
 | PATCH | `/api/notes/{id}` | the same fields, all optional | `NoteResponse` |
@@ -181,8 +181,7 @@ The write body:
 
 ```json
 {
-  "name_cn": "一點透視", "name_en": "one-point perspective", "name_alt": null,
-  "aliases": ["1點透視"],
+  "name": "一點透視",
   "category_id": 1,
   "topic_ids": [7],
   "summary": "平行線收斂到地平線上的一個消失點。",
@@ -193,14 +192,44 @@ The write body:
 }
 ```
 
-- At least one of the three names, on create and on the row a `PATCH` leaves.
+- `name` is required on create, trimmed, and may not be blank; a `PATCH` may
+  leave it out but not send it `null` or blank.
 - `category_id` must name a `note_category` option and `topic_ids` only
   `topic` options; anything else is a 422 naming the id.
-- Aliases are trimmed; the same alias twice (any case) is a 422.
 - A resource needs a `url`; one with no scheme gets `https://`.
 
-**Search.** `q` matches any name slot, an alias, or the summary, as a
-substring, case-insensitively; `%` and `_` are literal. It does not search the
-body: a word inside a long note would bury the note you meant. A repeated
-`category_id` or `topic_id` means any of them; different filters narrow each
-other.
+**Search.** `q` matches the name, the summary or the body, as a substring,
+case-insensitively; `%` and `_` are literal. A repeated `category_id` or
+`topic_id` means any of them; different filters narrow each other.
+
+## References
+
+`ReferenceSummary`: `{ id, name, url, groups, notes_excerpt, updated_at }`,
+where `groups` is a list of `{ id, value, description }` in the options'
+order and `notes_excerpt` is the start of the notes as one line — whitespace
+collapsed, cut at 120 characters with `…` — or `null` when there are none.
+The notes themselves are on the detail only, as a note's body is.
+
+`ReferenceResponse`: `{ id, name, url, groups, notes, created_at,
+updated_at }`.
+
+| Method | Path | Body / query | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/references` | `?q=&group_id=&no_group=true` | summaries ordered by name, ignoring case, then id |
+| GET | `/api/references/{id}` | | `ReferenceResponse` |
+| POST | `/api/references` | `{ name, url, group_ids?, notes? }` | 201 |
+| PATCH | `/api/references/{id}` | the same fields, all optional | `ReferenceResponse` |
+| DELETE | `/api/references/{id}` | | 204. Its group links go with it; the groups stay |
+
+- `name` and `url` are required on create; a `PATCH` may leave either out but
+  not send it `null` or blank. The name is trimmed.
+- `url` is http or https; one with no scheme gets `https://`; any other scheme
+  is a 422.
+- `group_ids` names `reference_group` options only; anything else, or an id
+  that does not exist, is a 422 naming the id. Sent, it replaces the list;
+  `[]` clears it; `null` is a 422.
+
+**Search.** `q` matches the name, the link or the notes, as a substring,
+case-insensitively; `%` and `_` are literal. A repeated `group_id` means any
+of them; `no_group=true` keeps only the references in no group; the filters
+narrow each other, so both together find nothing.
