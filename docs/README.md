@@ -12,6 +12,7 @@ in `notes/`.
 | `frontend.md` | The frontend's layout and pages, and how the built bundle reaches a browser. |
 | `logging.md` | What a log line looks like, why uvicorn's loggers are taken over, and why an inbound `X-Request-ID` is validated even though this app is gated. art's half of a platform contract. |
 | `options.md` | Every vocabulary: the closed ones in code, the categories, and the seeded system options. |
+| `testing.md` | What CI runs on a pull request, and why a documentation-only one skips it. |
 | `notes/decisions.md` | Why things are the way they are, including rejected alternatives. The one place that is allowed to talk about the past. |
 | `superpowers/specs/` | Working scaffolding for a task in progress. **Deleted when that task ends**, with anything durable moved into a real page first. |
 
