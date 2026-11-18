@@ -65,12 +65,53 @@ it). CI checks out the whole history, which brings `origin/main`.
 ## What CI runs
 
 `.github/workflows/ci.yml` (workflow name `Tests`) runs on every pull request
-and on nothing else, on `ubuntu-latest`. Its one job is `test`, the check the
-repository ruleset requires on `main` and `dev`. It checks out the whole
-history, decides whether the pull request changes anything but documentation,
-and only if it does goes on to assert that `deploy/migrations` is executable in the commit, `ruff check .`, shellcheck, the pytest
-suite against a `postgres:17` service, then `npm ci`, the frontend lint, the
-frontend tests and the frontend build.
+and on every merge-queue run (`merge_group`), and on nothing else, on
+`ubuntu-latest`. Its one job is `test`, the check the repository rulesets
+require on `main` and `dev`; it stays one job whatever the trigger, and its
+steps are conditioned instead. It checks out the whole history, decides
+whether the change touches anything but documentation, and then how much of
+the backend suite this run owes:
+
+| trigger | backend tests |
+| --- | --- |
+| pull request into `dev` | `tests/unit` |
+| ...that touches `alembic/`, `alembic.ini` or `app/models/` | `tests/unit`, plus `tests/test_migrations_build_the_schema.py` and `tests/test_migration_round_trip.py` |
+| ...that touches the test harness, the dependencies or the workflow | the full suite |
+| `merge_group` (the merge queue into `dev`) | the full suite |
+| pull request into `main` (the release), or any other base | the full suite |
+
+"The test harness" is `tests/conftest.py`, `tests/api/conftest.py`,
+`tests/databases.py` and `tests/revisions.py`; with `requirements*.txt` and
+`ci.yml` itself, a change there changes what every test means, so nothing is
+skipped. The revision-specific migration tests live beside the generic guards
+in `test_migrations_build_the_schema.py`, so a schema change runs the tests of
+the revision it adds along with every other one.
+
+Every other step runs on every non-documentation run, whatever the trigger:
+`deploy/migrations` executable in the commit, exactly one Alembic head
+(`alembic heads`, which reads the revision files and needs no database),
+`ruff check .`, shellcheck, then `npm ci`, the frontend lint, the frontend
+tests and the frontend build. Backend tests run with `-p no:cacheprovider`.
+
+The `pull_request` run of a pull request into `dev` is the fast feedback; the
+merge-queue run, on `dev` plus every pull request queued ahead of it, is where
+the full suite runs before anything lands. That split is only sound while
+`dev` merges through the queue (the platform's `docs/registry.md`, "What runs
+when"). In a merge-queue run the diff's base and head come from the merge
+group, since there is no pull request payload.
+
+### Unit tests and database tests
+
+The split is by directory:
+
+- **`tests/unit/`** needs no PostgreSQL. Nothing in it requests a fixture that
+  creates a database, and it passes with `DATABASE_URL` pointed at a port
+  nothing listens on.
+- **`tests/api/`** and the two migration files at the top of `tests/` need
+  PostgreSQL: the API tests through `test_engine`, the migration tests through
+  `scratch_database`.
+
+A new test goes in `tests/unit/` exactly when it needs no database.
 
 ### A documentation-only pull request skips the job
 
