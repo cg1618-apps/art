@@ -85,7 +85,7 @@ the client-route fallback to Starlette, and with it the `/api` and `/health`
 **The `.resolve()` + `is_relative_to()` + `is_file()` guard is load-bearing
 security, not tidiness.** `full_path` is user-controlled, and without the
 confinement `/..%2F.env` reads the app's own credentials from beside the bundle.
-`tests/test_spa_routing.py` asserts both halves — that a real file in the bundle
+`tests/unit/test_spa_routing.py` asserts both halves — that a real file in the bundle
 is served as itself, and that a traversal attempt is not — and the `.env` file
 its traversal test writes is load-bearing: `is_file()` is False for a path that
 does not exist, so without a real secret to leak the test would pass against an

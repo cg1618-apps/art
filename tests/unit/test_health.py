@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routers import health
-from tests.test_migrations_build_the_schema import head_revision
+from tests.revisions import head_revision
 
 
 def test_it_reports_ok_when_the_schema_matches_the_code(monkeypatch):

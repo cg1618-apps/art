@@ -21,3 +21,25 @@ def restore_config_defaults():
     from app import config
 
     importlib.reload(config)
+
+
+@pytest.fixture(scope="session")
+def test_databases():
+    """Once per run, before the run's first database: drop what crashed runs
+    left behind (`tests/databases.py` says which ones count).
+
+    Requested by every fixture that creates a database, and by nothing else,
+    so a run of `tests/unit` never opens a connection to PostgreSQL.
+    """
+    from tests import databases
+
+    databases.drop_leftovers()
+    return databases
+
+
+@pytest.fixture
+def scratch_database(test_databases):
+    """An empty database of this test's own, dropped afterwards. Yields its
+    URL, for a test that builds the chain itself."""
+    with test_databases.scratch() as name:
+        yield test_databases.server_url(name)
