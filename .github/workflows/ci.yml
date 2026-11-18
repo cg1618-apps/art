@@ -6,10 +6,10 @@ name: Tests
 # pull_request-triggered job may ever name it.
 #
 # How much runs depends on the trigger (docs/testing.md, "What CI runs"): a
-# pull request into dev runs the fast checks, plus the migration tests when it
-# touches the schema; the merge queue into dev and a release into main run the
-# full suite. It stays one job, `test`, whatever the trigger, because `test` is
-# the check the rulesets require.
+# pull request into dev runs the fast checks and the backend tests
+# scripts/pr_tests.py selects; the merge queue into dev and a release into
+# main run the full suite. It stays one job, `test`, whatever the trigger,
+# because `test` is the check the rulesets require.
 on:
   pull_request:
   merge_group:
@@ -78,46 +78,6 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # How much of the backend suite this run owes.
-      #   full=true    the merge queue, a release into main, a pull request
-      #                into any other base, or one that changes the test
-      #                harness, the dependencies or this workflow - what the
-      #                split cannot reason about runs everything.
-      #   full=false   a pull request into dev: tests/unit, which needs no
-      #                PostgreSQL. The merge queue runs the rest before it
-      #                lands.
-      #   schema=true  on that fast path, the pull request touches alembic/
-      #                or app/models/, so the migration tests run as well.
-      - name: Decide how much of the backend suite to run
-        id: suite
-        if: steps.changes.outputs.code == 'true'
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [ "$EVENT" != "pull_request" ] || [ "$BASE_REF" != "dev" ]; then
-            echo "$EVENT into ${BASE_REF:-dev}: the full suite."
-            echo "full=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed=$(git diff --name-only "$BASE...$HEAD")
-          harness='^(tests/conftest\.py|tests/api/conftest\.py|tests/databases\.py|tests/revisions\.py|requirements(-dev)?\.txt|\.github/workflows/ci\.yml)$'
-          if printf '%s\n' "$changed" | grep -qE "$harness"; then
-            echo "The test harness, the dependencies or this workflow changed: the full suite."
-            echo "full=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "full=false" >> "$GITHUB_OUTPUT"
-          if printf '%s\n' "$changed" | grep -qE '^(alembic/|alembic\.ini$|app/models/)'; then
-            echo "The schema changed: the fast checks and the migration tests."
-            echo "schema=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "The fast checks only."
-            echo "schema=false" >> "$GITHUB_OUTPUT"
-          fi
-
       # The bit has been lost six times across these repositories: both
       # development machines have core.fileMode=false, so git records 100644
       # for a file the filesystem calls executable and nothing in the working
@@ -166,21 +126,34 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: shellcheck deploy/migrations entrypoint.sh
 
+      # The full suite in the merge queue, on a release into main and on any
+      # other base; on a pull request into dev, the selection
+      # scripts/pr_tests.py prints - tests/unit, every test file the pull
+      # request adds or edits, and the migration guards and its own
+      # revisions' tests when it touches alembic/ or app/models/ (or FULL,
+      # when it changes the harness, the dependencies or this workflow).
       # -p no:cacheprovider: nothing in CI reads the cache back, and it is the
       # one thing a run writes outside tmp_path.
-      - name: Unit tests
-        if: steps.changes.outputs.code == 'true' && steps.suite.outputs.full == 'false'
-        run: python -m pytest tests/unit -q -p no:cacheprovider
-
-      # The from-zero build, the release round trip, and every revision's own
-      # tests, which sit beside the generic guards.
-      - name: Migration tests
-        if: steps.changes.outputs.code == 'true' && steps.suite.outputs.schema == 'true'
-        run: python -m pytest tests/test_migrations_build_the_schema.py tests/test_migration_round_trip.py -q -p no:cacheprovider
-
-      - name: Full backend suite
-        if: steps.changes.outputs.code == 'true' && steps.suite.outputs.full == 'true'
-        run: python -m pytest tests/ -q -p no:cacheprovider
+      - name: Run the tests
+        if: steps.changes.outputs.code == 'true'
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ] && [ "$BASE_REF" = "dev" ]; then
+            selection=$(python scripts/pr_tests.py "$BASE" "$HEAD")
+          else
+            selection=FULL
+          fi
+          echo "$selection"
+          if [ "$selection" = "FULL" ]; then
+            python -m pytest tests/ -q -p no:cacheprovider
+          else
+            # shellcheck disable=SC2086 # one path per line, none with spaces
+            python -m pytest -q -p no:cacheprovider $selection
+          fi
 
       - uses: actions/setup-node@v7
         if: steps.changes.outputs.code == 'true'

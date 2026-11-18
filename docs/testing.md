@@ -69,23 +69,31 @@ and on every merge-queue run (`merge_group`), and on nothing else, on
 `ubuntu-latest`. Its one job is `test`, the check the repository rulesets
 require on `main` and `dev`; it stays one job whatever the trigger, and its
 steps are conditioned instead. It checks out the whole history, decides
-whether the change touches anything but documentation, and then how much of
-the backend suite this run owes:
+whether the change touches anything but documentation, and then which backend
+tests this run owes:
 
 | trigger | backend tests |
 | --- | --- |
-| pull request into `dev` | `tests/unit` |
-| ...that touches `alembic/`, `alembic.ini` or `app/models/` | `tests/unit`, plus `tests/test_migrations_build_the_schema.py` and `tests/test_migration_round_trip.py` |
+| pull request into `dev` | `tests/unit`, plus every test file the pull request adds or edits |
+| ...that touches `alembic/`, `alembic.ini` or `app/models/` | the above, plus `tests/test_migrations_build_the_schema.py`, `tests/test_migration_round_trip.py` and any other test file naming a revision the pull request adds or edits |
 | ...that touches the test harness, the dependencies or the workflow | the full suite |
 | `merge_group` (the merge queue into `dev`) | the full suite |
 | pull request into `main` (the release), or any other base | the full suite |
 
+On a pull request into `dev` the selection is `scripts/pr_tests.py <base>
+<head>`, which prints the pytest arguments one per line, or `FULL`. Its
+decision is a pure function, `select`, pinned by
+`tests/unit/test_pr_tests.py`; it follows the shape of `media`'s and
+`food`'s. A deleted test file is not selected, and a changed file under
+`tests/unit/` is already covered by the unit tier.
+
 "The test harness" is `tests/conftest.py`, `tests/api/conftest.py`,
-`tests/databases.py` and `tests/revisions.py`; with `requirements*.txt` and
-`ci.yml` itself, a change there changes what every test means, so nothing is
-skipped. The revision-specific migration tests live beside the generic guards
-in `test_migrations_build_the_schema.py`, so a schema change runs the tests of
-the revision it adds along with every other one.
+`tests/databases.py`, `tests/revisions.py` and `scripts/pr_tests.py`; with
+`requirements*.txt` and `ci.yml` itself, a change there changes what every
+test means, so nothing is skipped. The revision-specific migration tests live
+beside the generic guards in `test_migrations_build_the_schema.py`, so a
+schema change runs the tests of the revision it adds along with every other
+one.
 
 Every other step runs on every non-documentation run, whatever the trigger:
 `deploy/migrations` executable in the commit, exactly one Alembic head
