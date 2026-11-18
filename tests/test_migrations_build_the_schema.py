@@ -7,11 +7,6 @@ create_all and never ran Alembic. This test is what makes that impossible here,
 and it is written before there is a single table to build.
 """
 
-import os
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
@@ -23,72 +18,21 @@ from alembic.migration import MigrationContext
 # metadata and pass vacuously - or pass only because some other test module
 # happened to import the models first.
 from app import models  # noqa: F401
-from app.config import settings
 from app.database import Base
+from tests.revisions import ROOT, head_revision, revision_before, run_alembic
 
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def head_revision() -> str:
-    """The chain's head, read from the revision files.
-
-    Derived, never written as a literal. These tests used to compare against
-    "0001_baseline", which meant the FIRST real migration this app ever added
-    would fail two tests that have nothing to do with it - and the failure
-    would name a revision id rather than the thing that was wrong.
-    """
-    from alembic.config import Config
-    from alembic.script import ScriptDirectory
-
-    cfg = Config(str(ROOT / "alembic.ini"))
-    # script_location is relative to the cwd, not to the ini file, so an
-    # absolute ini path is not enough on its own. Same reason app/routers
-    # /health.py overrides it.
-    cfg.set_main_option("script_location", str(ROOT / "alembic"))
-    heads = ScriptDirectory.from_config(cfg).get_heads()
-    assert len(heads) == 1, f"expected one head, found {heads}"
-    return heads[0]
-
-
-def _admin_url(database: str) -> str:
-    """settings.sqlalchemy_database_url with only the trailing db name swapped.
-
-    The scratch-database test needs an administrative connection, but it may
-    not assume the shared PostgreSQL's superuser password - that value is
-    per-machine and not something a test should hardcode. Deriving it from
-    the app's own settings means the test works wherever the app itself
-    would.
-    """
-    base = settings.sqlalchemy_database_url
-    return base.rsplit("/", 1)[0] + f"/{database}"
-
-
-@pytest.fixture
-def scratch_database():
-    """A database created for this test and dropped afterwards."""
-    admin = create_engine(_admin_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text("DROP DATABASE IF EXISTS art_migration_test"))
-        conn.execute(text("CREATE DATABASE art_migration_test"))
-    yield _admin_url("art_migration_test")
-    # WITH (FORCE) because the test reads the scratch database back, and a
-    # failed assertion leaves that connection open - a plain DROP would then
-    # fail in teardown and bury the assertion that actually matters under an
-    # unrelated error.
-    with admin.connect() as conn:
-        conn.execute(text("DROP DATABASE IF EXISTS art_migration_test WITH (FORCE)"))
+# Every test here takes `scratch_database` (tests/conftest.py): an empty
+# database under a name of its own, dropped afterwards, so two runs never
+# build into the same one.
+#
+# A test that stands at the revision below the one it exercises finds it with
+# `revision_before`, never by writing the parent's id in: reparenting a
+# revision to fix two heads would otherwise leave the test exercising the wrong
+# step, and green.
 
 
 def test_upgrade_head_runs_against_an_empty_database(scratch_database):
-    env = dict(os.environ)
-    env["DATABASE_URL"] = scratch_database
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+    result = run_alembic(scratch_database, "upgrade", "head")
     assert result.returncode == 0, result.stderr
 
     # A return code on its own says nothing about WHERE the run landed. With
@@ -108,12 +52,8 @@ def test_upgrade_head_runs_against_an_empty_database(scratch_database):
 
 
 def test_there_is_exactly_one_head():
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "heads"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
+    # `heads` reads the revision files and never connects, so the URL is moot.
+    result = run_alembic("postgresql://unused/unused", "heads")
     assert result.returncode == 0, result.stderr
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     assert len(lines) == 1, result.stdout
@@ -124,28 +64,12 @@ def test_there_is_exactly_one_head():
 
 
 def _upgrade(database_url: str, target: str = "head") -> None:
-    env = dict(os.environ)
-    env["DATABASE_URL"] = database_url
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", target],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+    result = run_alembic(database_url, "upgrade", target)
     assert result.returncode == 0, result.stderr
 
 
 def _downgrade(database_url: str, target: str) -> None:
-    env = dict(os.environ)
-    env["DATABASE_URL"] = database_url
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "downgrade", target],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+    result = run_alembic(database_url, "downgrade", target)
     assert result.returncode == 0, result.stderr
 
 
@@ -208,7 +132,7 @@ def test_notes_and_options_downgrade_and_upgrade_again(scratch_database):
     """The downgrade drops everything it created, so the platform's rollback
     can take it back and a later deploy can bring it forward again."""
     _upgrade(scratch_database)
-    _downgrade(scratch_database, "0001_baseline")
+    _downgrade(scratch_database, revision_before("0002_notes_and_options"))
 
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
@@ -310,7 +234,7 @@ def test_goals_and_roadmap_downgrade_and_upgrade_again(scratch_database):
     """Down to 0002 drops the roadmap's tables and nothing else; up again
     re-seeds it."""
     _upgrade(scratch_database)
-    _downgrade(scratch_database, "0002_notes_and_options")
+    _downgrade(scratch_database, revision_before("0003_goals_and_roadmap"))
 
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
@@ -486,7 +410,7 @@ def test_the_exercise_seed_is_idempotent(scratch_database):
 
 
 def test_a_renamed_stage_leaves_its_exercises_with_none_rather_than_failing(scratch_database):
-    _upgrade(scratch_database, "0003_goals_and_roadmap")
+    _upgrade(scratch_database, revision_before("0004_exercises_and_records"))
     engine = create_engine(scratch_database)
     with engine.begin() as conn:
         conn.execute(text("UPDATE stage SET name_cn = '比例（改）' WHERE name_cn = '比例'"))
@@ -514,7 +438,7 @@ def test_exercises_and_records_downgrade_and_upgrade_again(scratch_database):
     """Down to 0003 drops the module's tables and its categories' values, and
     puts the old category check back; up again re-seeds it."""
     _upgrade(scratch_database)
-    _downgrade(scratch_database, "0003_goals_and_roadmap")
+    _downgrade(scratch_database, revision_before("0004_exercises_and_records"))
 
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
@@ -540,7 +464,7 @@ def test_timer_downgrade_and_upgrade_again(scratch_database):
     """Down to 0004 drops `active_timer` and nothing else; up again brings
     it back with its singleton index."""
     _upgrade(scratch_database)
-    _downgrade(scratch_database, "0004_exercises_and_records")
+    _downgrade(scratch_database, revision_before("0005_timer"))
 
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
@@ -585,7 +509,7 @@ def test_note_name_keeps_the_first_slot_and_moves_the_other_names_to_the_remark(
 ):
     """0007's data path, on notes written at 0006: every name typed survives,
     either as the name or in the remark's 其他名稱 line."""
-    _upgrade(scratch_database, "0006_timer_draft")
+    _upgrade(scratch_database, revision_before("0007_note_name"))
     engine = create_engine(scratch_database)
     with engine.begin() as conn:
         def note(name_cn, name_en, name_alt, remark=None, aliases=()):
@@ -627,7 +551,7 @@ def test_note_name_keeps_the_first_slot_and_moves_the_other_names_to_the_remark(
     assert "note_alias" not in tables
     assert not {"name_cn", "name_en", "name_alt"} & _note_columns(scratch_database)
 
-    _downgrade(scratch_database, "0006_timer_draft")
+    _downgrade(scratch_database, revision_before("0007_note_name"))
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
         back = dict(conn.execute(text("SELECT id, name_cn FROM note")).all())
@@ -665,7 +589,7 @@ def test_references_downgrade_and_upgrade_again(scratch_database):
         )
     engine.dispose()
 
-    _downgrade(scratch_database, "0007_note_name")
+    _downgrade(scratch_database, revision_before("0008_references"))
     engine = create_engine(scratch_database)
     with engine.connect() as conn:
         tables = set(inspect(conn).get_table_names())

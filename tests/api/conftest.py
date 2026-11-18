@@ -5,6 +5,11 @@ The schema is built with `Base.metadata.create_all`, NOT by running Alembic.
 the real `alembic upgrade head` against a scratch database and comparing the
 result with the models. Neither is optional.
 
+The run builds into a database of its own, `art_test_<epoch>_<hex>`, created
+here and dropped when the run ends (`tests/databases.py`), so two runs - two
+worktrees, two sessions - never share one. The name is never fixed and never
+read from `.env`.
+
 Isolation is an outer transaction rolled back at teardown, with the session
 joined to it via savepoints so that code under test may call `commit()` without
 destroying the fixture rows around it.
@@ -15,44 +20,22 @@ the options it needs with `make_option`.
 """
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # `models` is imported for the side effect of registering every model on
 # Base.metadata before create_all runs; without it the test schema is empty.
 from app import models  # noqa: F401
-from app.config import settings
 from app.database import Base
-
-TEST_DATABASE = "art_test"
-
-
-def _url(database: str) -> str:
-    """The app's own connection settings with the database name swapped.
-
-    Derived rather than hardcoded: the password is per-machine and is not
-    something a test may carry.
-    """
-    return settings.sqlalchemy_database_url.rsplit("/", 1)[0] + f"/{database}"
 
 
 @pytest.fixture(scope="session")
-def test_engine():
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DATABASE} WITH (FORCE)"))
-        conn.execute(text(f"CREATE DATABASE {TEST_DATABASE}"))
-    admin.dispose()
-
-    engine = create_engine(_url(TEST_DATABASE))
-    Base.metadata.create_all(engine)
-    yield engine
-    engine.dispose()
-
-    admin = create_engine(_url("postgres"), isolation_level="AUTOCOMMIT")
-    with admin.connect() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS {TEST_DATABASE} WITH (FORCE)"))
-    admin.dispose()
+def test_engine(test_databases):
+    with test_databases.scratch() as name:
+        engine = create_engine(test_databases.server_url(name))
+        Base.metadata.create_all(engine)
+        yield engine
+        engine.dispose()
 
 
 @pytest.fixture
