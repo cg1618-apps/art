@@ -17,8 +17,8 @@ from app.models.system_option import SystemOption
 
 class Note(Base, TimestampMixin):
     """One name, required and not unique: two notes may share one. Not the
-    three name slots the other named rows carry - see decisions.md, "A note
-    has one name"."""
+    three name slots the other named rows carry - see
+    docs/notes/decisions/2026-10-03-a-note-has-one-name.md."""
 
     __tablename__ = "note"
 

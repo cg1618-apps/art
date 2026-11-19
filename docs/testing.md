@@ -62,6 +62,16 @@ holds no revision beyond main, the range is one step (`-1`); when
 back to one step as well and says so with a warning (`git fetch origin` fixes
 it). CI checks out the whole history, which brings `origin/main`.
 
+## A refusal test needs something to refuse
+
+`tests/unit/test_spa_routing.py` asserts both halves of the catch-all's
+confinement: a real file in the bundle is served as itself, and a traversal
+path (`/..%2F.env` and its spellings) is not. **The `.env` file the traversal
+test writes beside the bundle is load-bearing**: `is_file()` is False for a
+path that does not exist, so without a real file to leak the test would pass
+against an unguarded handler. The first half is the mirror case, proving the
+same handler does serve files and that the refusal is the guard's doing.
+
 ## What CI runs
 
 `.github/workflows/ci.yml` (workflow name `Tests`) runs on every pull request

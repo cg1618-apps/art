@@ -28,12 +28,13 @@ media tracker's by default.
 ## Status
 
 **Notes + Options, Goals + Roadmap, Record + Exercise, Timer and Reference
-are built** — modules 1, 2, 3, 5, 6 and 8 in `docs/notes/decisions.md`,
-"Structure"; Reference holds links only so far, and its other kinds wait for
-their own design pass. Schedule and Tool each wait for a design discussion
-with the owner first.
+are built**; Reference holds links only so far, and its other kinds wait for
+their own design pass. The modules still to build, in order, are in
+`docs/to-do-next.md`; Schedule and Tool each wait for a design discussion with
+the owner first.
 The timer's shape is the deliberate divergence this file anticipated; its
-reasons are in `decisions.md`.
+reasons are in
+`docs/notes/decisions/2026-10-03-the-timer-is-server-held-state.md`.
 
 Each module gets its own design pass immediately before it is built —
 brainstorm into `docs/superpowers/specs/`, then plan, then implement.

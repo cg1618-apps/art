@@ -47,6 +47,12 @@ topic links go when the note goes. Deleting an option sets
 `note.category_id` NULL and removes the topic links naming it — a note is worth
 keeping without them.
 
+**Named rows** — `goal`, `stage`, `exercise` — carry `name_cn`, `name_en` and
+`name_alt`, at least one required, and `display_name` is the first filled slot
+in that order (`NameFallbackMixin`, `app/models/base.py`): `name_cn` leads, as
+in `food`. An exercise's aliases sit in a child table that is searched and
+never displayed. `note` and `reference` carry one `name` instead.
+
 Every table carries `created_at` and `updated_at` except the link and child
 tables; both are `timestamptz` defaulted by the database clock
 (`TimestampMixin`, `app/models/base.py`).
@@ -232,7 +238,7 @@ is checked in the service (a foreign key cannot see the category).
 | `visibility` | text | no | `private` | `private`, `unlisted` or `public` (`ck_note_visibility`). Nothing reads it yet. |
 
 **One name**, not the three slots and the aliases the other named rows carry
-(`notes/decisions.md`, "A note has one name").
+(`notes/decisions/2026-10-03-a-note-has-one-name.md`).
 
 **The category is optional**: a note is worth writing before you decide what
 kind it is.
