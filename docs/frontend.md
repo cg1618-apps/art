@@ -2,7 +2,8 @@
 
 React + Vite, with `food`'s foundation: react-router 7, TanStack Query,
 Tailwind 4 with `food`'s design tokens, Vitest. Why `food`'s and not
-`media`'s is in `notes/decisions.md`. UI text is Traditional Chinese.
+`media`'s is in
+`notes/decisions/2026-10-03-the-frontend-foundation-is-foods.md`. UI text is Traditional Chinese.
 
 ## Layout
 

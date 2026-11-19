@@ -2,7 +2,7 @@
 
 Only links today. Other kinds of reference - an uploaded image above all -
 will be designed when they are built; nothing here anticipates them (see
-decisions.md, "References are links, filed by groups").
+docs/notes/decisions/2026-10-03-references-are-links-filed-by-groups.md).
 
 No `visibility`: a reference is someone else's page, never published from
 here.
