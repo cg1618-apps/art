@@ -18,3 +18,12 @@ the platform has not generalised. Nothing here invents its own answer.
   instead of uploading them here; that is part of the same open design.
 - An image reference's shape — a column on `reference`, a sibling table, or a
   child of it — is decided with the storage, not before.
+
+## `deploy/migrations downgrade` does not refuse an irreversible revision
+
+The platform's hook contract (`docs/registry.md` in the platform repository)
+requires `downgrade` to refuse any revision that declares itself
+irreversible. art's hook passes the target straight to Alembic. That holds
+only because no revision carries the marker yet. The first revision that
+needs one should adopt `media`'s `irreversible = True` marker and the check
+in its hook in the same change.
