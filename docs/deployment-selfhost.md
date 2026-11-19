@@ -1,6 +1,6 @@
 # Deployment, and getting back from a bad one
 
-Last verified: 2026-10-08
+Last verified: 2026-11-19
 
 **What this is for.** What a release of `art` does to the box, and what your
 options are when one fails. `bin/rollback` names this page when it freezes —
@@ -55,50 +55,69 @@ image back. That is deliberate and it is in the script's own header: undoing a
 dropped table recreates it **empty**, so a migration that dropped data leaves
 that data only in the dump.
 
-### For `art`, today, reversing the schema destroys nothing
+### For `art`, reversing the schema destroys data
 
-This is the one place this page differs from `travel`'s and `food`'s, and it
-will not stay true.
+`bin/rollback` reverses only the revisions **the failed release added**. It
+downgrades to the revision `bin/deploy` read from the database before the pull
+(the dump's `.migration` file), with `alembic downgrade <target>` run from the
+new image. A release that added no revision file gets no downgrade at all —
+only the image swap. Reversing a revision an *earlier* release shipped is
+never automatic; it is a hand-run `./deploy/migrations downgrade <target>`,
+and costs the same as the table below.
 
-`art` has exactly one revision — **`0001_baseline`** — and its `upgrade()` is
-deliberately empty. It creates no tables. There is nothing for a downgrade to
-drop, and no rollback of this app can currently lose a row, because there are
-no rows.
+Every revision after `0001_baseline` creates or reshapes something, and
+downgrading past it loses what its `downgrade()` drops. In chain order:
 
-So if a release of `art` fails today, **roll back freely**. The decision that
-costs something in the other apps costs nothing here.
+| Revision | Downgrading past it loses |
+| --- | --- |
+| `0001_baseline` | Nothing. Its `upgrade()` and `downgrade()` are both deliberately empty. |
+| `0002_notes_and_options` | `system_option`, `note`, `note_alias`, `note_resource` and `note_topic` — every note, and every option in every category, seeded or added. |
+| `0003_goals_and_roadmap` | `goal`, `stage` and `stage_resource` — the whole roadmap, including every edit made to the seeded levels and stages. |
+| `0004_exercises_and_records` | `exercise`, `exercise_alias`, `exercise_resource`, `exercise_topic`, `drill`, `drill_source_link`, `drill_resource`, `record` and `record_reference` — **every practice record**, every exercise and drill, and every `source`, `location` and `tool` option. |
+| `0005_timer` | `active_timer` — a timer running at the time is lost. A timer is not history, so nothing else is. |
+| `0006_timer_draft` | `active_timer.draft` — the record a running timer was filling in. |
+| `0007_note_name` | Each note's single `name` goes back into `name_cn`; `name_en`, `name_alt` and `note_alias` come back **empty**. No typed text is lost: the other names stay in the note's remark as the `其他名稱：` line the upgrade wrote, which the downgrade does not take back out. |
+| `0008_references` | `reference` and `reference_group` — every reference and its group tags, and every `reference_group` option. |
 
-### What changes the moment that stops being true
+Upgrading again recreates a dropped table, not what was in it: `0002`, `0003`
+and `0004` re-seed their starting rows on the way back up, but none of the
+owner's edits or entries.
 
-The first revision that creates a table makes this page's most important
-section wrong, and nothing will announce it. Whoever writes that revision
-**updates this section in the same commit**, with:
+**No revision declares itself irreversible.** None carries a marker, and
+`deploy/migrations downgrade` checks for none: it hands the target straight to
+Alembic. The platform's contract (`docs/registry.md`, "the hook answers three
+subcommands") requires the hook to refuse a revision whose author declared it
+irreversible; this hook meets that only vacuously, because there is nothing to
+refuse. The first revision whose downgrade would invent data rather than
+reverse a shape needs a marker and a hook that greps for it — `media`'s
+`irreversible = True` is the convention to copy.
 
-- the revision id, named;
-- the tables it creates, named;
-- one sentence saying that downgrading past it drops them and everything in
-  them.
+### The pre-deploy dump is the way back, and it is not a gentler path
 
-`travel/docs/deployment-selfhost.md` is the worked example — its
-`p1acking0001` section says exactly that about `packing_list`, `packing_item`
-and `label_option`. Copy its shape.
+A downgrade's losses are recoverable **only from the pre-deploy dump** —
+nothing else holds them. But the dump is taken **before** the release, so
+restoring it discards everything written since. `bin/rollback` refuses to do
+that automatically for exactly that reason: it would throw away every write
+since the dump to recover from a failure that usually did not touch data at
+all. So it never restores: when it cannot go on safely it freezes, names the
+dump and stops, and when it does finish a downgrade it ends with *"SCHEMA was
+reversed. DATA was NOT restored"* and names the dump again.
 
-### The dump is not a gentler path, and that trap arrives with the first table
+| Option | What it costs |
+| --- | --- |
+| Let `bin/rollback` downgrade | Whatever the table above says for every revision the release added. |
+| Restore the pre-deploy dump | Every write made since the release. |
+| Fix forward | Nothing, if you can ship a fix. |
 
-Worth knowing before it applies, because the reasoning is not obvious and the
-moment to learn it is not mid-incident.
+**There is no route that keeps the data.** For data entered by hand — which
+practice records, notes and references are — fix forward is usually right, and
+rolling back is usually only right when the app cannot serve at all and a fix
+is not minutes away.
 
-The pre-deploy dump is taken **before** the release, so restoring it discards
-everything written since. `bin/rollback` refuses to do that automatically for
-exactly that reason: it would throw away every write since the dump to recover
-from a failure that usually did not touch data at all. So it freezes, names the
-dump, and stops.
-
-Once this app has tables, there will be **no route that keeps the data**. The
-real choice becomes: roll back and lose everything entered since the release,
-or fix forward with a corrected build. For data entered by hand — which
-practice records and references are — fix forward is usually right, and rolling
-back is usually only right when the app cannot serve at all.
+Ask the database what it is at before deciding ([What the database is
+at](#what-the-database-is-at)): a downgrade costs the rows of every table above
+from the revision after the target up to the one it reports. This page does
+not record what production is at; only the box can say that.
 
 ### Where the dumps are
 
@@ -152,6 +171,6 @@ runs can adopt or destroy it. It used to be possible, and it happened on
 ## Why there is one page here and two in `media`
 
 `media` splits this across `deploy/README.md` and
-`docs/deployment-selfhost.md`. This app has one revision and one hook; a second
-page would be a second place to go stale. If `deploy/` grows past the single
+`docs/deployment-selfhost.md`. This app has one hook and no other deploy
+tooling; a second page would be a second place to go stale. If `deploy/` grows past the single
 hook, split it then.
